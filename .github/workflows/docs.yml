@@ -1,0 +1,45 @@
+name: Docs Validation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".agents/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - ".agents/**"
+
+jobs:
+  validate-doc-layout:
+    name: Validate documented files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure key documentation files exist
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          expected = [
+              "docs/README.md",
+              "docs/00-project-definition.md",
+              "docs/01-mvp-architecture.md",
+              "docs/02-python-api.md",
+              "docs/03-package-structure.md",
+              "docs/04-project-startup-plan.md",
+              "docs/05-scaling-strategy.md",
+              "docs/06-github-actions-strategy.md",
+              "docs/07-git-github-workflow.md",
+              ".agents/rules.md",
+          ]
+
+          missing = [path for path in expected if not Path(path).exists()]
+          if missing:
+              raise SystemExit(f"Missing documented files: {missing}")
+          PY
