@@ -127,11 +127,14 @@ def test_invalid_step_order_and_reserved_step_name_fail_validation() -> None:
     """Reserved names and negative order should be rejected."""
     invalid_order_step = StepDefinition(name="check_order", method_name="check_order", order=-1)
     reserved_name_step = StepDefinition(name="run", method_name="run", order=0)
+    reserved_method_name_step = StepDefinition(name="generate_response", method_name="run", order=0)
 
     with pytest.raises(WorkflowDefinitionError, match="order"):
         validate_step_definition(invalid_order_step)
     with pytest.raises(WorkflowDefinitionError, match="reserved"):
         validate_step_definition(reserved_name_step)
+    with pytest.raises(WorkflowDefinitionError, match="method name"):
+        validate_step_definition(reserved_method_name_step)
 
 
 def test_valid_step_method_signatures_are_supported() -> None:

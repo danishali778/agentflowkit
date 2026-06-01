@@ -64,6 +64,8 @@ def validate_step_definition(step: StepDefinition) -> StepDefinition:
         raise WorkflowDefinitionError(f"Step name {step.name!r} is reserved.")
     if not step.method_name:
         raise WorkflowDefinitionError("Step definitions must have a non-empty method name.")
+    if step.method_name in _RESERVED_STEP_NAMES:
+        raise WorkflowDefinitionError(f"Step method name {step.method_name!r} is reserved.")
     if step.order < 0:
         raise WorkflowDefinitionError("Step definition order must be zero or greater.")
     if step.retries is not None and step.retries < 0:
