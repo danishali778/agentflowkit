@@ -16,7 +16,6 @@ from agentflow.models import RunContext, StepResult, StepStatus, WorkflowResult,
 from agentflow.retry import resolve_retry_policy, should_retry, sleep_for_retry
 from agentflow.validation import (
     validate_initial_state,
-    validate_step_method_signature,
     validate_workflow_definition,
 )
 
@@ -50,6 +49,8 @@ class WorkflowExecutor:
         if workflow_definition is None:
             raise WorkflowDefinitionError("Workflow metadata is missing from the workflow class.")
 
+        # Validation has already happened during @workflow decoration in Phase 4.
+        # We re-validate here only if the definition might have been tampered with.
         validated_definition = validate_workflow_definition(workflow_definition)
         validated_state = validate_initial_state(state)
         workflow_instance.state = validated_state
@@ -63,8 +64,6 @@ class WorkflowExecutor:
 
         for step_definition in validated_definition.steps:
             bound_method = getattr(workflow_instance, step_definition.method_name)
-            unbound_method = getattr(type(workflow_instance), step_definition.method_name)
-            validate_step_method_signature(unbound_method)
             retry_policy = resolve_retry_policy(validated_definition, step_definition)
 
             step_started_at = _utc_now()

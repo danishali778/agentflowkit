@@ -161,19 +161,18 @@ def test_raise_on_failure_after_retries_mentions_attempt_count_and_error_type() 
         raise AssertionError("Expected WorkflowExecutionError after retry exhaustion.")
 
 
-def test_workflow_definition_validation_runs_before_execution() -> None:
-    """Executor should validate workflow metadata before running any steps."""
-
-    @workflow
-    class EmptyWorkflow:
-        pass
+def test_workflow_definition_validation_runs_at_definition_time() -> None:
+    """The @workflow decorator should validate metadata when the class is defined."""
 
     try:
-        EmptyWorkflow().run({})
+
+        @workflow
+        class EmptyWorkflow:
+            pass
     except WorkflowDefinitionError as error:
         assert "at least one step" in str(error)
     else:
-        raise AssertionError("Expected WorkflowDefinitionError for an empty workflow.")
+        raise AssertionError("Expected WorkflowDefinitionError for an empty workflow definition.")
 
 
 def test_none_initial_state_raises_state_validation_error() -> None:

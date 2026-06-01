@@ -55,8 +55,12 @@ def _attach_step_metadata(
     description: str | None,
 ) -> FunctionType:
     """Attach step metadata and return the original function unchanged."""
+    target = function
+    if isinstance(target, (staticmethod, classmethod)):
+        target = target.__func__
+
     setattr(
-        function,
+        target,
         STEP_DEFINITION_ATTR,
         _build_step_definition(
             function,
@@ -81,7 +85,14 @@ def _build_workflow_definition(
     """Collect step metadata from a workflow class in declaration order."""
     steps: list[StepDefinition] = []
 
+    # Use cls.__dict__ to preserve declaration order.
+    # Inheritance is intentionally excluded in the current MVP to keep
+    # step discovery predictable and order-preserving.
     for attribute in cls.__dict__.values():
+        # Handle wrapped methods like @staticmethod or @classmethod
+        if isinstance(attribute, (staticmethod, classmethod)):
+            attribute = attribute.__func__
+
         step_definition = getattr(attribute, STEP_DEFINITION_ATTR, None)
         if step_definition is None:
             continue
@@ -106,17 +117,30 @@ def _attach_workflow_metadata(
     retry_delay: float,
 ) -> ClassType:
     """Attach workflow metadata and return the original class unchanged."""
-    setattr(
-        cls,
-        WORKFLOW_DEFINITION_ATTR,
-        _build_workflow_definition(
-            cls,
-            name=name,
-            retries=retries,
-            retry_on=retry_on,
-            retry_delay=retry_delay,
-        ),
+    from agentflow.validation import (
+        validate_step_method_signature,
+        validate_workflow_definition,
     )
+
+    definition = _build_workflow_definition(
+        cls,
+        name=name,
+        retries=retries,
+        retry_on=retry_on,
+        retry_delay=retry_delay,
+    )
+
+    # Perform eager validation of the workflow definition and step signatures.
+    validate_workflow_definition(definition)
+    for step_definition in definition.steps:
+        method = getattr(cls, step_definition.method_name)
+        # Unwrap staticmethod/classmethod for signature validation if needed.
+        if isinstance(method, (staticmethod, classmethod)):
+            method = method.__func__
+        validate_step_method_signature(method)
+
+    setattr(cls, WORKFLOW_DEFINITION_ATTR, definition)
+
     if "run" not in cls.__dict__:
         cls.run = _build_run_method()
     return cls
