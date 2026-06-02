@@ -1,51 +1,46 @@
 # Agent Workflow Kit
 
-Agent Workflow Kit is an open-source Python SDK for building agent workflows with plain
-Python classes, step decorators, shared state, and reliable execution primitives.
+Agent Workflow Kit is an open-source Python SDK for building agent workflows
+with plain Python classes, step decorators, shared state, retries, and
+structured execution results.
 
 ## Status
 
-The MVP runtime is implemented. You can define workflows with `@workflow` and `@step`,
-run them with shared mutable state, configure retries, and inspect structured workflow
-and step results.
+The main MVP is implemented.
 
-## Why this project exists
-
-Many useful agent workflows do not need graph-first complexity on day one. This project
-aims to provide a simpler, beginner-friendly SDK for linear workflows that still gives
-developers real execution structure.
-
-The MVP is planned to focus on:
-
-- workflow classes
-- step decorators
-- ordered execution
-- shared state
-- retries
-- structured results
-
-## Current feature set
+Today, the SDK already supports:
 
 - workflow classes with `@workflow`
-- step registration with `@step`
+- ordered step methods with `@step`
 - shared mutable state through `self.state`
-- ordered synchronous execution
+- synchronous execution
 - retry handling for transient failures
 - structured `WorkflowResult` and `StepResult`
 - optional `raise_on_failure=True`
 
-## Installation
+This makes the project useful today for linear agent-style workflows such as:
 
-```bash
-pip install -e .[dev]
-```
+- refund handling
+- support triage
+- content review
+- internal multi-step automations
+
+## Why this project exists
+
+Many useful agent workflows do not need graph-first complexity on day one.
+
+Agent Workflow Kit is meant to provide a simpler path:
+
+- more structure than ad hoc scripts
+- less framework overhead than graph-first orchestration tools
+- a class-based Python authoring model that is easy to teach and debug
 
 ## Quickstart
 
 ```python
 from dataclasses import dataclass
 
-from agentflow import workflow, step
+from agentflow import step, workflow
 
 
 @dataclass
@@ -56,22 +51,26 @@ class RefundState:
     policy_ok: bool = False
     response_text: str = ""
 
+
 @workflow
 class RefundWorkflow:
     @step
-    def check_order(self):
+    def check_order(self) -> str:
         self.state.order_found = True
+        return f"Order {self.state.order_id} located."
 
     @step
-    def verify_policy(self):
-        self.state.policy_ok = self.state.amount <= 100.0
+    def verify_policy(self) -> str:
+        self.state.policy_ok = self.state.order_found and self.state.amount <= 100.0
+        return "Refund policy check completed."
 
     @step
-    def generate_response(self):
+    def generate_response(self) -> str:
         if self.state.policy_ok:
             self.state.response_text = f"Refund approved for {self.state.order_id}."
         else:
             self.state.response_text = f"Refund denied for {self.state.order_id}."
+        return self.state.response_text
 
 
 workflow_instance = RefundWorkflow()
@@ -82,14 +81,38 @@ print(result.state.response_text)
 print(result.steps[-1].output)
 ```
 
-## Example guides
+## Current capabilities
+
+The current SDK already gives you:
+
+- a decorator-based authoring model
+- ordered workflow execution
+- step-level retries with fixed delay
+- validation for workflow definitions and step signatures
+- framework-specific exceptions
+- workflow and step timing information
+- per-step outputs, errors, and attempt counts
+
+The public `agentflow` package currently exposes:
+
+- `workflow`
+- `step`
+- `WorkflowResult`
+- `StepResult`
+- `RetryPolicy`
+- framework exception types
+
+## Examples
+
+The repository includes runnable examples under `examples/`.
 
 ### Refund workflow
 
-The refund example shows the simplest happy path:
+This example shows the simplest happy path:
+
 - linear step execution
 - state mutation across steps
-- final message generation from earlier decisions
+- a final response generated from earlier decisions
 
 Run it with:
 
@@ -101,10 +124,11 @@ See: [examples/refund_workflow.py](examples/refund_workflow.py)
 
 ### Support triage workflow
 
-The support triage example shows:
-- a typed state object for a support ticket
-- use of the optional step `context`
-- queue assignment based on computed priority
+This example shows:
+
+- a typed support-ticket state object
+- the optional step context parameter
+- queue assignment from computed workflow state
 - readable inspection of per-step results
 
 Run it with:
@@ -117,10 +141,11 @@ See: [examples/support_triage.py](examples/support_triage.py)
 
 ### Content review workflow
 
-The content review example shows:
+This example shows:
+
 - a retrying moderation step
 - transient failure recovery with `TimeoutError`
-- final result inspection including attempt counts
+- final decision output and attempt counts
 
 Run it with:
 
@@ -130,28 +155,26 @@ python examples/content_review.py
 
 See: [examples/content_review.py](examples/content_review.py)
 
-## Repository layout
+## Installation
 
-The repository uses a `src/` layout and keeps design decisions in `docs/`.
+For local development:
 
-- `docs/` contains architecture, API, startup, scaling, and workflow guidance.
-- `src/agentflow/` contains the SDK implementation.
-- `tests/` contains behavior-focused test coverage.
-- `examples/` contains runnable workflow examples.
-- `.github/workflows/` contains CI and release automation.
+```bash
+pip install -e .[dev]
+```
+
+The project currently targets Python `3.11+`.
 
 ## Development
 
-The project targets Python `3.11+`.
-
-### Run checks
+Run the local checks with:
 
 ```bash
 ruff check .
 pytest
 ```
 
-### Run examples
+Run the examples with:
 
 ```bash
 python examples/refund_workflow.py
@@ -159,28 +182,46 @@ python examples/support_triage.py
 python examples/content_review.py
 ```
 
+## Repository layout
+
+The repository uses a `src/` layout.
+
+- `src/agentflow/` contains the SDK implementation
+- `tests/` contains behavior-focused tests
+- `examples/` contains runnable example workflows
+- `.github/workflows/` contains CI and release validation
+- `docs/` contains deeper project, architecture, and roadmap material
+
 ## Documentation
 
-Start with the docs index:
+If you want a high-level current-state summary, start with:
+
+- [docs/09-current-project-status.md](docs/09-current-project-status.md)
+
+If you want the deeper architecture and planning material, start with:
 
 - [docs/README.md](docs/README.md)
 
-The current source of truth for architecture and implementation direction lives in:
+## Not implemented yet
 
-- `docs/00-project-definition.md`
-- `docs/01-mvp-architecture.md`
-- `docs/02-python-api.md`
-- `docs/03-package-structure.md`
-- `docs/08-implementation-plan.md`
+The current SDK does not yet include:
 
-## Roadmap
-
-The initial build will focus on the documented MVP before any advanced features such as:
-
-- branching
+- branching or conditional routing
 - human approval steps
-- adapters
-- dashboards
-- worker systems
+- async execution
+- worker backends
+- dashboards or workflow visualization
+- framework adapters such as LangGraph integration
 
-Those remain future work by design.
+Those remain future extensions beyond the current MVP.
+
+## Roadmap direction
+
+The next stage of the project is not "finish the MVP."
+
+The likely next areas of work are:
+
+- release hardening
+- repository and contributor polish
+- docs hardening
+- post-MVP features such as branching or approval steps
