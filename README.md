@@ -190,17 +190,23 @@ The repository uses a `src/` layout.
 - `tests/` contains behavior-focused tests
 - `examples/` contains runnable example workflows
 - `.github/workflows/` contains CI and release validation
-- `docs/` contains deeper project, architecture, and roadmap material
+- `docs/` contains deeper public documentation, including current status,
+  architecture, and usage guides
 
 ## Documentation
 
 If you want a high-level current-state summary, start with:
 
-- [docs/09-current-project-status.md](docs/09-current-project-status.md)
+- [docs/current-status.md](docs/current-status.md)
 
-If you want the deeper architecture and planning material, start with:
+If you want the broader public docs index, start with:
 
 - [docs/README.md](docs/README.md)
+
+If you want deeper technical documentation, start with:
+
+- [docs/architecture/README.md](docs/architecture/README.md)
+- [docs/guides/README.md](docs/guides/README.md)
 
 ## Not implemented yet
 
