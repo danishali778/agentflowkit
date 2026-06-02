@@ -97,7 +97,7 @@ Today, the project validates things such as:
 - invalid step metadata or conflicting declarations
 
 This is important because the SDK is trying to provide a lightweight developer
-experience without becoming “just conventions and hope.”
+experience without becoming "just conventions and hope."
 
 ## Examples currently included
 
