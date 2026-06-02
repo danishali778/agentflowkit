@@ -3,11 +3,13 @@ name: Docs Validation
 on:
   pull_request:
     paths:
+      - "README.md"
       - "docs/**"
   push:
     branches:
       - main
     paths:
+      - "README.md"
       - "docs/**"
 
 jobs:
@@ -25,6 +27,7 @@ jobs:
           from pathlib import Path
 
           expected = [
+              "README.md",
               "docs/README.md",
               "docs/current-status.md",
               "docs/architecture/README.md",
