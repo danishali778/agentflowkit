@@ -4,17 +4,15 @@ on:
   pull_request:
     paths:
       - "docs/**"
-      - ".agents/**"
   push:
     branches:
       - main
     paths:
       - "docs/**"
-      - ".agents/**"
 
 jobs:
   validate-doc-layout:
-    name: Validate documented files
+    name: Validate public docs layout
     runs-on: ubuntu-latest
 
     steps:
@@ -28,15 +26,15 @@ jobs:
 
           expected = [
               "docs/README.md",
-              "docs/00-project-definition.md",
-              "docs/01-mvp-architecture.md",
-              "docs/02-python-api.md",
-              "docs/03-package-structure.md",
-              "docs/04-project-startup-plan.md",
-              "docs/05-scaling-strategy.md",
-              "docs/06-github-actions-strategy.md",
-              "docs/07-git-github-workflow.md",
-              ".agents/rules.md",
+              "docs/current-status.md",
+              "docs/architecture/README.md",
+              "docs/architecture/overview.md",
+              "docs/architecture/runtime.md",
+              "docs/architecture/api.md",
+              "docs/guides/README.md",
+              "docs/guides/first-workflow.md",
+              "docs/guides/retries-and-failures.md",
+              "docs/guides/inspecting-results.md",
           ]
 
           missing = [path for path in expected if not Path(path).exists()]
