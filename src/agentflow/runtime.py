@@ -7,9 +7,10 @@ needed to keep invocation and delegation logic readable.
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 
 from agentflow.executor import WorkflowExecutor
-from agentflow.models import RunContext, WorkflowResult
+from agentflow.models import ApprovalDecision, ApprovalRequest, RunContext, WorkflowResult
 
 
 def _invoke_step(step_method, _workflow_instance: object, context: RunContext) -> object | None:
@@ -28,10 +29,12 @@ def run_workflow(
     state: object,
     *,
     raise_on_failure: bool = False,
+    approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
 ) -> WorkflowResult:
     """Delegate workflow execution to the MVP executor."""
     return WorkflowExecutor().run(
         workflow_instance,
         state,
         raise_on_failure=raise_on_failure,
+        approval_handler=approval_handler,
     )

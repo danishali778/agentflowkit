@@ -37,6 +37,10 @@ def test_step_configured_form_captures_explicit_metadata() -> None:
         retry_on=(TimeoutError, ConnectionError),
         retry_delay=1.5,
         description="Check whether the refund policy allows approval.",
+        routes={"approved": "approve_refund"},
+        requires_approval=True,
+        approval_message="Manager approval required.",
+        approval_metadata={"minimum_role": "manager"},
     )
     def verify_policy(self) -> None:
         """Verify the policy against the current order."""
@@ -49,6 +53,10 @@ def test_step_configured_form_captures_explicit_metadata() -> None:
     assert step_definition.retry_on == (TimeoutError, ConnectionError)
     assert step_definition.retry_delay == 1.5
     assert step_definition.description == "Check whether the refund policy allows approval."
+    assert step_definition.routes == {"approved": "approve_refund"}
+    assert step_definition.requires_approval is True
+    assert step_definition.approval_message == "Manager approval required."
+    assert step_definition.approval_metadata == {"minimum_role": "manager"}
     assert verify_policy.__doc__ == "Verify the policy against the current order."
 
 

@@ -13,6 +13,17 @@ from datetime import datetime
 from enum import StrEnum
 
 
+class _EndSentinel:
+    """Represents an explicit terminal route target."""
+
+    def __repr__(self) -> str:
+        return "END"
+
+
+END = _EndSentinel()
+RouteTarget = str | _EndSentinel
+
+
 class WorkflowStatus(StrEnum):
     """Represents the lifecycle state of a workflow run."""
 
@@ -49,6 +60,10 @@ class StepDefinition:
     retry_on: tuple[type[BaseException], ...] | None = None
     retry_delay: float | None = None
     description: str | None = None
+    routes: dict[str, RouteTarget] | None = None
+    requires_approval: bool = False
+    approval_message: str | None = None
+    approval_metadata: dict[str, object] | None = None
 
 
 @dataclass(slots=True)
@@ -73,6 +88,37 @@ class RunContext:
 
 
 @dataclass(slots=True)
+class ApprovalRequest:
+    """Data passed to an approval handler before an approval-gated step runs."""
+
+    workflow_name: str
+    step_name: str
+    run_id: str
+    state: object
+    message: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ApprovalDecision:
+    """Decision returned by an approval handler."""
+
+    approved: bool
+    reason: str | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RouteDecision:
+    """Captures one route decision made by a workflow step."""
+
+    step_name: str
+    route_key: str
+    next_step: str | None = None
+    ended: bool = False
+
+
+@dataclass(slots=True)
 class StepResult:
     """Captures the observable outcome of a single step execution."""
 
@@ -84,6 +130,11 @@ class StepResult:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_ms: int = 0
+    route_key: str | None = None
+    next_step: str | None = None
+    skipped_reason: str | None = None
+    approval_required: bool = False
+    approval_decision: ApprovalDecision | None = None
 
 
 @dataclass(slots=True)
@@ -98,3 +149,4 @@ class WorkflowResult:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     duration_ms: int = 0
+    route_trace: list[RouteDecision] = field(default_factory=list)
