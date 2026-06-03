@@ -5,16 +5,14 @@
 Agent Workflow Kit is currently a small workflow runtime for building linear
 and forward-routed agent workflows with plain Python.
 
-At a high level, the implemented system has eight main parts:
+At a high level, the implemented system has six main internal areas:
 
 - decorators
-- models
+- models and exceptions
+- runtime
+- controls
+- inspection
 - validation
-- executor/runtime
-- retry helpers
-- route and approval helpers
-- lifecycle hooks
-- graph export
 
 ## Current architecture in one diagram
 
@@ -90,11 +88,10 @@ as:
 Validation is kept separate from decorators so definition-time metadata and
 runtime checks do not become tightly coupled.
 
-### 4. Executor and runtime helpers
+### 4. Runtime package
 
 The execution layer lives mainly in:
 
-- `agentflow.executor`
 - `agentflow.runtime`
 
 The executor is responsible for:
@@ -109,11 +106,25 @@ The executor is responsible for:
 - collecting structured results
 - optionally raising `WorkflowExecutionError`
 
-The runtime module stays intentionally small and delegates to the executor.
+The `agentflow.runtime` package contains the executor and invocation helpers.
+The old `agentflow.executor` import path remains as a compatibility wrapper.
 
-### 5. Retry layer
+### 5. Controls package
 
-Retry behavior lives in `agentflow.retry`.
+Runtime controls live in `agentflow.controls`.
+
+This package contains:
+
+- retries
+- routing
+- approvals
+- lifecycle hooks
+
+The old top-level control modules such as `agentflow.retry`,
+`agentflow.routing`, `agentflow.approvals`, and `agentflow.hooks` remain as
+compatibility wrappers.
+
+#### Retry behavior
 
 Its job is to:
 
@@ -123,7 +134,7 @@ Its job is to:
 
 This keeps retry policy logic out of the main executor flow.
 
-### 6. Route and approval layer
+#### Route and approval behavior
 
 Route behavior is represented in step metadata and resolved by the executor.
 
@@ -144,9 +155,7 @@ Its job is to:
 - normalize boolean decisions into `ApprovalDecision`
 - stop the workflow before step invocation when approval is denied or missing
 
-### 7. Lifecycle hooks layer
-
-Lifecycle hooks live in `agentflow.hooks` and are emitted by the executor.
+#### Lifecycle hooks
 
 Their job is to:
 
@@ -155,9 +164,11 @@ Their job is to:
 - let users observe execution without changing workflow logic
 - fail explicitly with `HookExecutionError` when hook callbacks fail
 
-### 8. Graph export layer
+### 6. Inspection package
 
-Graph export lives in `agentflow.graph`.
+Graph export lives in `agentflow.inspection`.
+
+The old `agentflow.graph` import path remains as a compatibility wrapper.
 
 Its job is to:
 
@@ -166,6 +177,29 @@ Its job is to:
 - represent workflow steps and route edges as graph nodes and edges
 - mark approval-gated steps in exported metadata
 - render deterministic Mermaid diagrams
+
+## Internal package layout
+
+The current implementation is organized like this:
+
+```text
+src/agentflow/
+  controls/
+    approvals.py
+    hooks.py
+    retries.py
+    routing.py
+  inspection/
+    graph.py
+  runtime/
+    executor.py
+    invocation.py
+  validation/
+    definitions.py
+```
+
+Top-level modules such as `agentflow.retry` and `agentflow.graph` are kept for
+import compatibility and delegate to the organized internal packages.
 
 ## Execution flow in one picture
 

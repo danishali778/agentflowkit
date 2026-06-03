@@ -4,6 +4,15 @@ This module defines the first stable top-level public API for the MVP runtime
 so users can import the main workflow primitives from ``agentflow`` directly.
 """
 
+from agentflow.controls.hooks import (
+    StepFinishedEvent,
+    StepStartedEvent,
+    WorkflowEvent,
+    WorkflowFinishedEvent,
+    WorkflowHook,
+    WorkflowStartedEvent,
+)
+from agentflow.controls.retries import RetryPolicy
 from agentflow.decorators import step, workflow
 from agentflow.exceptions import (
     AgentFlowError,
@@ -15,19 +24,11 @@ from agentflow.exceptions import (
     WorkflowDefinitionError,
     WorkflowExecutionError,
 )
-from agentflow.graph import (
+from agentflow.inspection.graph import (
     WorkflowGraph,
     WorkflowGraphEdge,
     WorkflowGraphNode,
     export_workflow_graph,
-)
-from agentflow.hooks import (
-    StepFinishedEvent,
-    StepStartedEvent,
-    WorkflowEvent,
-    WorkflowFinishedEvent,
-    WorkflowHook,
-    WorkflowStartedEvent,
 )
 from agentflow.models import (
     END,
@@ -37,7 +38,6 @@ from agentflow.models import (
     StepResult,
     WorkflowResult,
 )
-from agentflow.retry import RetryPolicy
 
 __version__ = "0.1.0"
 
