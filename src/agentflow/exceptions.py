@@ -37,3 +37,7 @@ class RouteResolutionError(AgentFlowError):
 
 class ApprovalRequiredError(AgentFlowError):
     """Raised when an approval-gated step cannot obtain approval."""
+
+
+class HookExecutionError(AgentFlowError):
+    """Raised when a workflow lifecycle hook fails."""

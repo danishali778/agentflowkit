@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable, TypeVar, overload
 
+from agentflow.hooks import WorkflowHook
 from agentflow.models import (
     ApprovalDecision,
     ApprovalRequest,
@@ -153,6 +154,7 @@ def _build_run_method() -> Callable[..., Any]:
         *,
         raise_on_failure: bool = False,
         approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+        hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None = None,
     ) -> Any:
         from agentflow.runtime import run_workflow
 
@@ -161,6 +163,7 @@ def _build_run_method() -> Callable[..., Any]:
             state,
             raise_on_failure=raise_on_failure,
             approval_handler=approval_handler,
+            hooks=hooks,
         )
 
     run.__doc__ = "Run the workflow with the provided initial state."

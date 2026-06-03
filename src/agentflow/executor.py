@@ -8,15 +8,25 @@ advanced concerns like retries are layered in later phases.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from agentflow.decorators import WORKFLOW_DEFINITION_ATTR
 from agentflow.exceptions import (
     ApprovalRequiredError,
+    HookExecutionError,
     RouteResolutionError,
     WorkflowDefinitionError,
     WorkflowExecutionError,
+)
+from agentflow.hooks import (
+    StepFinishedEvent,
+    StepStartedEvent,
+    WorkflowFinishedEvent,
+    WorkflowHook,
+    WorkflowStartedEvent,
+    emit_hooks,
 )
 from agentflow.models import (
     END,
@@ -193,6 +203,7 @@ class WorkflowExecutor:
         *,
         raise_on_failure: bool = False,
         approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+        hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None = None,
     ) -> WorkflowResult:
         """Run a workflow instance and return its structured execution result."""
         workflow_definition = getattr(
@@ -212,6 +223,38 @@ class WorkflowExecutor:
         executed_results: dict[int, StepResult] = {}
         route_trace: list[RouteDecision] = []
         run_id = uuid4().hex
+
+        try:
+            emit_hooks(
+                hooks,
+                WorkflowStartedEvent(
+                    workflow_name=validated_definition.name,
+                    run_id=run_id,
+                    state=workflow_instance.state,
+                    started_at=workflow_started_at,
+                ),
+            )
+        except HookExecutionError as error:
+            workflow_finished_at = _utc_now()
+            workflow_result = WorkflowResult(
+                workflow_name=validated_definition.name,
+                state=workflow_instance.state,
+                status=WorkflowStatus.FAILED,
+                steps=[],
+                error=error,
+                started_at=workflow_started_at,
+                finished_at=workflow_finished_at,
+                duration_ms=_duration_ms(workflow_started_at, workflow_finished_at),
+                route_trace=[],
+            )
+            if raise_on_failure:
+                _raise_workflow_execution_error(
+                    validated_definition.name,
+                    workflow_error=error,
+                    step_results=[],
+                )
+            return workflow_result
+
         step_indexes = {
             step_definition.name: index
             for index, step_definition in enumerate(validated_definition.steps)
@@ -220,6 +263,37 @@ class WorkflowExecutor:
         route_ended = False
 
         from agentflow.runtime import _invoke_step
+
+        def record_step_result(index: int, result: StepResult) -> HookExecutionError | None:
+            """Store a step result and emit the matching lifecycle hook."""
+            executed_results[index] = result
+            try:
+                emit_hooks(
+                    hooks,
+                    StepFinishedEvent(
+                        workflow_name=validated_definition.name,
+                        run_id=run_id,
+                        step_name=result.step_name,
+                        state=workflow_instance.state,
+                        result=result,
+                    ),
+                )
+            except HookExecutionError as error:
+                hook_finished_at = _utc_now()
+                failed_result = replace(
+                    result,
+                    status=StepStatus.FAILED,
+                    error=error,
+                    finished_at=hook_finished_at,
+                    duration_ms=(
+                        _duration_ms(result.started_at, hook_finished_at)
+                        if result.started_at is not None
+                        else result.duration_ms
+                    ),
+                )
+                executed_results[index] = failed_result
+                return error
+            return None
 
         while current_step_index < len(validated_definition.steps):
             step_definition = validated_definition.steps[current_step_index]
@@ -232,6 +306,33 @@ class WorkflowExecutor:
             attempts = 0
             approval_decision: ApprovalDecision | None = None
 
+            try:
+                emit_hooks(
+                    hooks,
+                    StepStartedEvent(
+                        workflow_name=validated_definition.name,
+                        run_id=run_id,
+                        step_name=step_definition.name,
+                        state=workflow_instance.state,
+                        started_at=step_started_at,
+                    ),
+                )
+            except HookExecutionError as error:
+                step_finished_at = _utc_now()
+                executed_results[current_step_index] = StepResult(
+                    step_name=step_definition.name,
+                    status=StepStatus.FAILED,
+                    attempts=attempts,
+                    output=None,
+                    error=error,
+                    started_at=step_started_at,
+                    finished_at=step_finished_at,
+                    duration_ms=_duration_ms(step_started_at, step_finished_at),
+                    approval_required=step_definition.requires_approval,
+                )
+                workflow_error = error
+                break
+
             if step_definition.requires_approval:
                 try:
                     approval_decision = _request_step_approval(
@@ -243,7 +344,7 @@ class WorkflowExecutor:
                     )
                 except Exception as error:
                     step_finished_at = _utc_now()
-                    executed_results[current_step_index] = StepResult(
+                    step_result = StepResult(
                         step_name=step_definition.name,
                         status=StepStatus.FAILED,
                         attempts=attempts,
@@ -254,26 +355,29 @@ class WorkflowExecutor:
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=True,
                     )
-                    workflow_error = error
+                    hook_error = record_step_result(current_step_index, step_result)
+                    workflow_error = hook_error or error
                     break
 
                 if not approval_decision.approved:
                     step_finished_at = _utc_now()
-                    workflow_error = ApprovalRequiredError(
+                    approval_error = ApprovalRequiredError(
                         f"Approval denied for step {step_definition.name!r}."
                     )
-                    executed_results[current_step_index] = StepResult(
+                    step_result = StepResult(
                         step_name=step_definition.name,
                         status=StepStatus.FAILED,
                         attempts=attempts,
                         output=None,
-                        error=workflow_error,
+                        error=approval_error,
                         started_at=step_started_at,
                         finished_at=step_finished_at,
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=True,
                         approval_decision=approval_decision,
                     )
+                    hook_error = record_step_result(current_step_index, step_result)
+                    workflow_error = hook_error or approval_error
                     break
 
             while True:
@@ -293,7 +397,7 @@ class WorkflowExecutor:
                         continue
 
                     step_finished_at = _utc_now()
-                    executed_results[current_step_index] = StepResult(
+                    step_result = StepResult(
                         step_name=step_definition.name,
                         status=StepStatus.FAILED,
                         attempts=attempts,
@@ -305,7 +409,8 @@ class WorkflowExecutor:
                         approval_required=step_definition.requires_approval,
                         approval_decision=approval_decision,
                     )
-                    workflow_error = error
+                    hook_error = record_step_result(current_step_index, step_result)
+                    workflow_error = hook_error or error
                     break
 
                 step_finished_at = _utc_now()
@@ -316,7 +421,7 @@ class WorkflowExecutor:
                         step_indexes,
                     )
                 except RouteResolutionError as error:
-                    executed_results[current_step_index] = StepResult(
+                    step_result = StepResult(
                         step_name=step_definition.name,
                         status=StepStatus.FAILED,
                         attempts=attempts,
@@ -328,13 +433,14 @@ class WorkflowExecutor:
                         approval_required=step_definition.requires_approval,
                         approval_decision=approval_decision,
                     )
-                    workflow_error = error
+                    hook_error = record_step_result(current_step_index, step_result)
+                    workflow_error = hook_error or error
                     break
 
                 if step_definition.routes is not None:
                     route_trace.append(route_decision)
 
-                executed_results[current_step_index] = StepResult(
+                step_result = StepResult(
                     step_name=step_definition.name,
                     status=StepStatus.SUCCEEDED,
                     attempts=attempts,
@@ -352,6 +458,10 @@ class WorkflowExecutor:
                     approval_required=step_definition.requires_approval,
                     approval_decision=approval_decision,
                 )
+                hook_error = record_step_result(current_step_index, step_result)
+                if hook_error is not None:
+                    workflow_error = hook_error
+                    break
 
                 if step_definition.routes is not None:
                     if route_decision.ended:
@@ -394,18 +504,56 @@ class WorkflowExecutor:
             route_trace=route_trace,
         )
 
-        if workflow_error is not None and raise_on_failure:
-            failing_result = next(
-                step_result
-                for step_result in step_results
-                if step_result.status is StepStatus.FAILED
+        try:
+            emit_hooks(
+                hooks,
+                WorkflowFinishedEvent(
+                    workflow_name=validated_definition.name,
+                    run_id=run_id,
+                    state=workflow_instance.state,
+                    result=workflow_result,
+                ),
             )
-            failing_step = failing_result.step_name
-            error_type = type(workflow_error).__name__
-            raise WorkflowExecutionError(
-                f"Workflow {validated_definition.name!r} failed at step "
-                f"{failing_step!r} after {failing_result.attempts} attempt(s) "
-                f"due to {error_type}."
-            ) from workflow_error
+        except HookExecutionError as error:
+            workflow_finished_at = _utc_now()
+            workflow_error = error
+            workflow_result.status = WorkflowStatus.FAILED
+            workflow_result.error = error
+            workflow_result.finished_at = workflow_finished_at
+            workflow_result.duration_ms = _duration_ms(
+                workflow_started_at,
+                workflow_finished_at,
+            )
+
+        if workflow_error is not None and raise_on_failure:
+            _raise_workflow_execution_error(
+                validated_definition.name,
+                workflow_error=workflow_error,
+                step_results=step_results,
+            )
 
         return workflow_result
+
+
+def _raise_workflow_execution_error(
+    workflow_name: str,
+    *,
+    workflow_error: Exception,
+    step_results: list[StepResult],
+) -> None:
+    """Raise a workflow boundary error while preserving the original cause."""
+    failing_result = next(
+        (step_result for step_result in step_results if step_result.status is StepStatus.FAILED),
+        None,
+    )
+    error_type = type(workflow_error).__name__
+    if failing_result is None:
+        raise WorkflowExecutionError(
+            f"Workflow {workflow_name!r} failed outside step execution due to {error_type}."
+        ) from workflow_error
+
+    raise WorkflowExecutionError(
+        f"Workflow {workflow_name!r} failed at step "
+        f"{failing_result.step_name!r} after {failing_result.attempts} attempt(s) "
+        f"due to {error_type}."
+    ) from workflow_error
