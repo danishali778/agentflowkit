@@ -14,6 +14,12 @@ from agentflow.exceptions import (
     WorkflowDefinitionError,
     WorkflowExecutionError,
 )
+from agentflow.graph import (
+    WorkflowGraph,
+    WorkflowGraphEdge,
+    WorkflowGraphNode,
+    export_workflow_graph,
+)
 from agentflow.models import (
     END,
     ApprovalDecision,
@@ -37,11 +43,15 @@ __all__ = [
     "RetryPolicy",
     "StateValidationError",
     "StepExecutionError",
+    "WorkflowGraph",
+    "WorkflowGraphEdge",
+    "WorkflowGraphNode",
     "StepResult",
     "WorkflowDefinitionError",
     "WorkflowExecutionError",
     "WorkflowResult",
     "__version__",
+    "export_workflow_graph",
     "step",
     "workflow",
 ]
