@@ -15,6 +15,8 @@ Today, the SDK already supports:
 - shared mutable state through `self.state`
 - synchronous execution
 - retry handling for transient failures
+- conditional branching with explicit route maps
+- synchronous human approval callbacks
 - structured `WorkflowResult` and `StepResult`
 - optional `raise_on_failure=True`
 
@@ -23,6 +25,8 @@ This makes the project useful today for linear agent-style workflows such as:
 - refund handling
 - support triage
 - content review
+- branching refund decisions
+- approval-gated refund decisions
 - internal multi-step automations
 
 ## Why this project exists
@@ -87,6 +91,8 @@ The current SDK already gives you:
 
 - a decorator-based authoring model
 - ordered workflow execution
+- conditional routing to later steps or `END`
+- human approval callbacks before selected steps run
 - step-level retries with fixed delay
 - validation for workflow definitions and step signatures
 - framework-specific exceptions
@@ -100,6 +106,12 @@ The public `agentflow` package currently exposes:
 - `WorkflowResult`
 - `StepResult`
 - `RetryPolicy`
+- `END`
+- `ApprovalRequest`
+- `ApprovalDecision`
+- `RouteDecision`
+- `ApprovalRequiredError`
+- `RouteResolutionError`
 - framework exception types
 
 ## Examples
@@ -155,6 +167,40 @@ python examples/content_review.py
 
 See: [examples/content_review.py](examples/content_review.py)
 
+### Branching refund workflow
+
+This example shows:
+
+- route-based branching from a decision step
+- explicit terminal paths with `END`
+- route trace inspection
+- skipped step results
+
+Run it with:
+
+```bash
+python examples/branching_refund_workflow.py
+```
+
+See: [examples/branching_refund_workflow.py](examples/branching_refund_workflow.py)
+
+### Approval refund workflow
+
+This example shows:
+
+- a synchronous approval handler
+- approval request metadata
+- approved and denied approval decisions
+- approval details recorded on `StepResult`
+
+Run it with:
+
+```bash
+python examples/approval_refund_workflow.py
+```
+
+See: [examples/approval_refund_workflow.py](examples/approval_refund_workflow.py)
+
 ## Installation
 
 For local development:
@@ -180,6 +226,8 @@ Run the examples with:
 python examples/refund_workflow.py
 python examples/support_triage.py
 python examples/content_review.py
+python examples/branching_refund_workflow.py
+python examples/approval_refund_workflow.py
 ```
 
 ## Repository layout
@@ -212,9 +260,8 @@ If you want deeper technical documentation, start with:
 
 The current SDK does not yet include:
 
-- branching or conditional routing
-- human approval steps
 - async execution
+- persistent approval pause/resume
 - worker backends
 - dashboards or workflow visualization
 - framework adapters such as LangGraph integration
@@ -230,4 +277,4 @@ The likely next areas of work are:
 - release hardening
 - repository and contributor polish
 - docs hardening
-- post-MVP features such as branching or approval steps
+- post-MVP features such as persistent approvals or async execution

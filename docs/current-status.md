@@ -3,7 +3,7 @@
 ## Summary
 
 Agent Workflow Kit is currently a working MVP Python SDK for building linear
-agent workflows with plain Python classes and decorators.
+and conditional agent workflows with plain Python classes and decorators.
 
 The project is no longer at the scaffold or design-only stage. The core runtime
 exists, the main developer-facing API is implemented, the examples are runnable,
@@ -24,6 +24,8 @@ The current MVP supports a clear and usable workflow authoring model:
 - ordered workflow methods declared with `@step`
 - shared mutable state stored on `self.state`
 - synchronous step-by-step execution
+- conditional routing from one step to a later step or `END`
+- synchronous human approval callbacks before selected steps run
 - step retries with a fixed delay policy
 - validation for workflow definitions and step signatures
 - structured workflow and step result objects
@@ -40,10 +42,12 @@ The implemented runtime follows a simple model:
 1. A workflow class is defined with `@workflow`.
 2. Step methods are declared with `@step`.
 3. A state object is passed into `workflow_instance.run(state)`.
-4. Steps execute in order.
+4. Steps execute in order unless a routed step chooses a later step.
 5. Each step can mutate shared workflow state.
-6. Retry behavior is applied when configured.
-7. The runtime returns a structured `WorkflowResult`.
+6. Approval handlers are called before approval-gated steps run.
+7. Retry behavior is applied when configured.
+8. Route decisions and skipped steps are recorded when branching is used.
+9. The runtime returns a structured `WorkflowResult`.
 
 In practice, this makes the current SDK especially suitable for workflows such
 as:
@@ -51,6 +55,7 @@ as:
 - refund handling
 - support ticket triage
 - content review and moderation decisions
+- branching approval or denial workflows
 - internal assistant workflows with a small number of ordered stages
 
 ## Public API status
@@ -62,6 +67,12 @@ The top-level `agentflow` package currently exposes the main MVP surface area:
 - `WorkflowResult`
 - `StepResult`
 - `RetryPolicy`
+- `END`
+- `ApprovalRequest`
+- `ApprovalDecision`
+- `RouteDecision`
+- `ApprovalRequiredError`
+- `RouteResolutionError`
 - framework-specific exception types
 
 This public API is enough to author and run the examples currently included in
@@ -78,6 +89,8 @@ A workflow caller can inspect:
 - per-step outputs
 - per-step errors
 - per-step attempt counts
+- route decisions and skipped-step reasons for branching workflows
+- approval decisions for approval-gated steps
 - timing information for workflow and step execution
 
 This gives the project immediate practical value even without dashboards or
@@ -93,6 +106,8 @@ Today, the project validates things such as:
 
 - workflow definitions
 - reserved method naming rules
+- route targets and route direction
+- approval metadata
 - step signature expectations
 - invalid step metadata or conflicting declarations
 
@@ -106,6 +121,8 @@ The repository includes runnable example workflows under `examples/`:
 - `refund_workflow.py`
 - `support_triage.py`
 - `content_review.py`
+- `branching_refund_workflow.py`
+- `approval_refund_workflow.py`
 
 These examples demonstrate the implemented runtime rather than imaginary future
 features. Together they show:
@@ -114,6 +131,8 @@ features. Together they show:
 - state mutation across steps
 - context-aware workflow logic
 - retry behavior on transient failures
+- route-based branching with explicit terminal paths
+- human approval callbacks with approved and denied decisions
 - inspection of final results and step-level details
 
 ## Current repository maturity
@@ -135,9 +154,8 @@ the shape of a real early-stage Python SDK repository.
 
 The current MVP does not yet include:
 
-- branching or conditional routing
-- human approval steps
 - async execution
+- persistent approval pause/resume
 - worker backends
 - dashboards
 - workflow visualization
@@ -147,8 +165,8 @@ These are future extensions, not hidden or partially implemented features.
 
 ## Best way to think about the project right now
 
-Agent Workflow Kit is currently a focused MVP for linear, stateful,
-decorator-based workflow orchestration in Python.
+Agent Workflow Kit is currently a focused MVP for stateful, decorator-based
+workflow orchestration in Python.
 
 It is already useful for real small-scale agent workflows, but it is still
 early in scope. The current strength of the project is clarity:
@@ -156,6 +174,6 @@ early in scope. The current strength of the project is clarity:
 - a small public API
 - a simple execution model
 - typed state plus ordered steps
-- retries, validation, and structured results built into the runtime
+- branching, retries, validation, and structured results built into the runtime
 
 That is the current status of the project today.

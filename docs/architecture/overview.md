@@ -3,15 +3,16 @@
 ## Purpose
 
 Agent Workflow Kit is currently a small workflow runtime for building linear
-agent workflows with plain Python.
+and forward-routed agent workflows with plain Python.
 
-At a high level, the implemented system has five main parts:
+At a high level, the implemented system has six main parts:
 
 - decorators
 - models
 - validation
 - executor/runtime
 - retry helpers
+- route and approval helpers
 
 ## Current architecture in one diagram
 
@@ -23,7 +24,9 @@ flowchart LR
     D --> E
     E --> F[Validation]
     E --> G[RetryPolicy resolution]
-    E --> H[Step invocation]
+    E --> K[Approval callback]
+    E --> J[Step invocation]
+    J --> H[Route resolution]
     H --> I[WorkflowResult / StepResult]
 ```
 
@@ -38,6 +41,8 @@ Its job is to:
 - mark step methods with `@step`
 - mark workflow classes with `@workflow`
 - collect step metadata in declaration order
+- attach route metadata when `@step(routes=...)` is used
+- attach approval metadata when approval options are used
 - attach workflow metadata to the class
 - inject a `run(...)` method if the class does not already define one
 
@@ -53,6 +58,8 @@ These models describe:
 - workflow metadata
 - step metadata
 - runtime context
+- approval requests and decisions
+- route decisions
 - step results
 - workflow results
 - status enums
@@ -69,6 +76,8 @@ as:
 - empty workflows
 - duplicate step names
 - invalid retry configuration
+- invalid route targets
+- invalid approval metadata
 - unsupported step signatures
 - reserved names like `run`
 
@@ -88,6 +97,8 @@ The executor is responsible for:
 - validating the workflow and input state
 - assigning shared state to `self.state`
 - running steps in order
+- resolving forward route decisions
+- requesting approval before approval-gated steps run
 - applying retry behavior
 - collecting structured results
 - optionally raising `WorkflowExecutionError`
@@ -106,6 +117,27 @@ Its job is to:
 
 This keeps retry policy logic out of the main executor flow.
 
+### 6. Route and approval layer
+
+Route behavior is represented in step metadata and resolved by the executor.
+
+Its job is to:
+
+- map string route keys to later step names or `END`
+- reject invalid route outputs
+- record route decisions in workflow results
+- synthesize skipped results for unvisited steps in branching workflows
+
+Approval behavior is also represented in step metadata and resolved by the
+executor.
+
+Its job is to:
+
+- build `ApprovalRequest` payloads
+- call the user-provided approval handler
+- normalize boolean decisions into `ApprovalDecision`
+- stop the workflow before step invocation when approval is denied or missing
+
 ## Execution flow in one picture
 
 ```mermaid
@@ -116,14 +148,16 @@ sequenceDiagram
     participant Executor
     participant Validation
     participant Retry
+    participant Approval
 
     User->>Workflow: define class with @workflow and @step
     Decorators->>Workflow: attach WorkflowDefinition and StepDefinition metadata
     User->>Workflow: run(state)
     Workflow->>Executor: delegate to WorkflowExecutor
     Executor->>Validation: validate workflow and state
+    Executor->>Approval: request approval when configured
     Executor->>Retry: resolve retry policy per step
-    Executor->>Workflow: invoke step methods in order
+    Executor->>Workflow: invoke step methods and resolve routes
     Executor-->>User: return WorkflowResult
 ```
 
@@ -132,7 +166,9 @@ sequenceDiagram
 The current architecture is intentionally:
 
 - synchronous
-- linear
+- linear by default
+- forward-routed when configured
+- approval-gated when configured
 - stateful
 - explicit
 - small enough to inspect without framework magic
@@ -142,16 +178,16 @@ This is why the project is currently well-suited for workflows like:
 - refund decisions
 - support triage
 - content review
-- internal linear automation flows
+- approval-gated refunds
+- internal automation flows with simple conditional paths
 
 ## Current limits
 
 The implemented architecture does not yet include:
 
-- branching
 - async execution
 - persistence
-- human approval steps
+- persistent approval pause/resume
 - distributed execution
 
 Those should be treated as future extensions, not current architecture.

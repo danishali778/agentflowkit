@@ -12,6 +12,8 @@ If you are new to the project, read these guides in this order:
 1. [first-workflow.md](first-workflow.md)
 2. [retries-and-failures.md](retries-and-failures.md)
 3. [inspecting-results.md](inspecting-results.md)
+4. [branching-workflows.md](branching-workflows.md)
+5. [human-approval.md](human-approval.md)
 
 ## What these guides cover
 
@@ -20,6 +22,8 @@ If you are new to the project, read these guides in this order:
 - how retry settings affect step execution
 - how to handle failure behavior
 - how to inspect `WorkflowResult` and `StepResult`
+- how to route workflows into conditional paths
+- how to gate selected steps with synchronous approval callbacks
 
 ## What these guides do not cover
 
