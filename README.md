@@ -1,8 +1,8 @@
 # Agent Workflow Kit
 
 Agent Workflow Kit is an open-source Python SDK for building agent workflows
-with plain Python classes, step decorators, shared state, retries, and
-structured execution results.
+with plain Python classes, step decorators, shared state, retries, structured
+execution results, and metadata-only graph export.
 
 ## Status
 
@@ -17,6 +17,7 @@ Today, the SDK already supports:
 - retry handling for transient failures
 - conditional branching with explicit route maps
 - synchronous human approval callbacks
+- workflow graph export as Mermaid diagrams
 - structured `WorkflowResult` and `StepResult`
 - optional `raise_on_failure=True`
 
@@ -27,6 +28,7 @@ This makes the project useful today for linear agent-style workflows such as:
 - content review
 - branching refund decisions
 - approval-gated refund decisions
+- workflow graph inspection
 - internal multi-step automations
 
 ## Why this project exists
@@ -98,6 +100,7 @@ The current SDK already gives you:
 - framework-specific exceptions
 - workflow and step timing information
 - per-step outputs, errors, and attempt counts
+- metadata-only workflow graph export with Mermaid rendering
 
 The public `agentflow` package currently exposes:
 
@@ -110,6 +113,10 @@ The public `agentflow` package currently exposes:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowGraph`
+- `WorkflowGraphNode`
+- `WorkflowGraphEdge`
+- `export_workflow_graph`
 - `ApprovalRequiredError`
 - `RouteResolutionError`
 - framework exception types
@@ -201,6 +208,22 @@ python examples/approval_refund_workflow.py
 
 See: [examples/approval_refund_workflow.py](examples/approval_refund_workflow.py)
 
+### Graph export workflow
+
+This example shows:
+
+- graph export from workflow metadata
+- Mermaid rendering without running the workflow
+- route edges, approval-gated nodes, and terminal `END` paths
+
+Run it with:
+
+```bash
+python examples/graph_export.py
+```
+
+See: [examples/graph_export.py](examples/graph_export.py)
+
 ## Installation
 
 For local development:
@@ -228,6 +251,7 @@ python examples/support_triage.py
 python examples/content_review.py
 python examples/branching_refund_workflow.py
 python examples/approval_refund_workflow.py
+python examples/graph_export.py
 ```
 
 ## Repository layout
@@ -263,7 +287,8 @@ The current SDK does not yet include:
 - async execution
 - persistent approval pause/resume
 - worker backends
-- dashboards or workflow visualization
+- dashboards or interactive visual editors
+- graph execution
 - framework adapters such as LangGraph integration
 
 Those remain future extensions beyond the current MVP.

@@ -264,8 +264,8 @@ def test_top_level_result_and_exception_exports_match_submodules() -> None:
     assert agentflow.StateValidationError is StateValidationError
 
 
-def test_public_api_all_contains_only_the_expected_phase_five_symbols() -> None:
-    """The top-level package should expose only the intended Phase 5 names."""
+def test_public_api_all_contains_only_the_expected_symbols() -> None:
+    """The top-level package should expose only the intended public names."""
     expected_exports = {
         "AgentFlowError",
         "ApprovalDecision",
@@ -280,8 +280,12 @@ def test_public_api_all_contains_only_the_expected_phase_five_symbols() -> None:
         "StepResult",
         "WorkflowDefinitionError",
         "WorkflowExecutionError",
+        "WorkflowGraph",
+        "WorkflowGraphEdge",
+        "WorkflowGraphNode",
         "WorkflowResult",
         "__version__",
+        "export_workflow_graph",
         "step",
         "workflow",
     }

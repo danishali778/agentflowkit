@@ -21,6 +21,10 @@ The current top-level public API is intentionally small:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowGraph`
+- `WorkflowGraphNode`
+- `WorkflowGraphEdge`
+- `export_workflow_graph`
 - `ApprovalRequiredError`
 - `AgentFlowError`
 - `WorkflowDefinitionError`
@@ -29,8 +33,8 @@ The current top-level public API is intentionally small:
 - `StateValidationError`
 - `RouteResolutionError`
 
-That API shape is enough to define workflows, run them, inspect results, and
-reason about framework-specific failures.
+That API shape is enough to define workflows, run them, inspect results, export
+workflow graphs, and reason about framework-specific failures.
 
 ## Public API in one diagram
 
@@ -45,11 +49,13 @@ flowchart TD
     A --> J[END sentinel]
     A --> K[RouteDecision]
     A --> L[ApprovalRequest / ApprovalDecision]
+    A --> M[Workflow graph export]
     B --> H[Workflow class authoring]
     C --> H
     H --> I[Run workflow]
     I --> D
     D --> E
+    H --> M
 ```
 
 ## Decorator API
@@ -96,6 +102,60 @@ Approval options currently include:
 
 Use it in step route maps when a branch should complete the workflow
 successfully instead of moving to another step.
+
+## Graph export API
+
+### `export_workflow_graph(...)`
+
+`export_workflow_graph(...)` builds a metadata-only graph from a decorated
+workflow class or workflow instance.
+
+It does not run workflow steps, mutate state, call approval handlers, or
+simulate route decisions. It only inspects declared workflow metadata.
+
+```python
+from agentflow import export_workflow_graph
+
+graph = export_workflow_graph(RefundWorkflow)
+print(graph.to_mermaid())
+```
+
+Graph export reuses normal workflow definition validation. Invalid workflows
+raise `WorkflowDefinitionError` before a graph is returned.
+
+### `WorkflowGraph`
+
+`WorkflowGraph` represents the exported workflow structure.
+
+It currently includes:
+
+- `workflow_name`
+- `nodes`
+- `edges`
+- `to_mermaid()`
+
+### `WorkflowGraphNode`
+
+`WorkflowGraphNode` represents one exported node.
+
+It currently includes:
+
+- `id`
+- `label`
+- `kind`
+- `requires_approval`
+- `description`
+
+### `WorkflowGraphEdge`
+
+`WorkflowGraphEdge` represents one exported edge.
+
+It currently includes:
+
+- `source`
+- `target`
+- `kind`
+- `route_key`
 
 ## Workflow authoring shape
 
@@ -335,7 +395,8 @@ The current API does not yet expose higher-level workflow features such as:
 - async workflow APIs
 - persistence handles
 - persistent approval pause/resume
-- visualization APIs
+- graph execution APIs
+- dashboards or interactive visual editors
 - external orchestration adapters
 
 That is intentional. The current public API is trying to stay small, teachable,
@@ -347,6 +408,7 @@ The current API is a compact workflow authoring and inspection surface:
 
 - decorators define the workflow
 - `run(...)` executes it
+- `export_workflow_graph(...)` explains declared structure before execution
 - result objects explain what happened
 - framework exceptions distinguish SDK failures from business failures
 

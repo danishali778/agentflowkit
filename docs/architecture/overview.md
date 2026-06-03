@@ -5,7 +5,7 @@
 Agent Workflow Kit is currently a small workflow runtime for building linear
 and forward-routed agent workflows with plain Python.
 
-At a high level, the implemented system has six main parts:
+At a high level, the implemented system has seven main parts:
 
 - decorators
 - models
@@ -13,6 +13,7 @@ At a high level, the implemented system has six main parts:
 - executor/runtime
 - retry helpers
 - route and approval helpers
+- graph export
 
 ## Current architecture in one diagram
 
@@ -22,6 +23,8 @@ flowchart LR
     C[Step methods<br/>@step] --> D[StepDefinition]
     B --> E[WorkflowExecutor]
     D --> E
+    B --> L[Graph export]
+    D --> L
     E --> F[Validation]
     E --> G[RetryPolicy resolution]
     E --> K[Approval callback]
@@ -138,6 +141,18 @@ Its job is to:
 - normalize boolean decisions into `ApprovalDecision`
 - stop the workflow before step invocation when approval is denied or missing
 
+### 7. Graph export layer
+
+Graph export lives in `agentflow.graph`.
+
+Its job is to:
+
+- read workflow metadata without executing steps
+- validate workflow definitions before export
+- represent workflow steps and route edges as graph nodes and edges
+- mark approval-gated steps in exported metadata
+- render deterministic Mermaid diagrams
+
 ## Execution flow in one picture
 
 ```mermaid
@@ -149,9 +164,13 @@ sequenceDiagram
     participant Validation
     participant Retry
     participant Approval
+    participant Graph
 
     User->>Workflow: define class with @workflow and @step
     Decorators->>Workflow: attach WorkflowDefinition and StepDefinition metadata
+    User->>Graph: export_workflow_graph(Workflow)
+    Graph->>Validation: validate workflow definition
+    Graph-->>User: return WorkflowGraph or Mermaid text
     User->>Workflow: run(state)
     Workflow->>Executor: delegate to WorkflowExecutor
     Executor->>Validation: validate workflow and state
@@ -169,6 +188,7 @@ The current architecture is intentionally:
 - linear by default
 - forward-routed when configured
 - approval-gated when configured
+- graph-exportable before execution
 - stateful
 - explicit
 - small enough to inspect without framework magic
@@ -189,5 +209,7 @@ The implemented architecture does not yet include:
 - persistence
 - persistent approval pause/resume
 - distributed execution
+- graph execution
+- dashboards or interactive visual editors
 
 Those should be treated as future extensions, not current architecture.

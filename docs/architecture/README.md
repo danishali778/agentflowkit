@@ -3,7 +3,7 @@
 This folder explains the current architecture of Agent Workflow Kit.
 
 The focus here is the architecture that is **implemented today**, not the full
- long-term vision of the project.
+long-term vision of the project.
 
 If you are new to the codebase, read these files in this order:
 
@@ -15,6 +15,7 @@ If you are new to the codebase, read these files in this order:
 
 - the main runtime building blocks
 - how a workflow moves from definition to execution
+- how workflow metadata can be exported as a graph
 - how state, validation, retries, and results fit together
 - what the current public API exposes
 - what the current implementation does and does not do

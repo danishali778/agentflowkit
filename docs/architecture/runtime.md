@@ -7,6 +7,10 @@ This document explains how the current runtime executes a workflow from
 
 ## Runtime flow
 
+Graph export is separate from runtime execution. `export_workflow_graph(...)`
+reads and validates workflow metadata, but it does not enter the execution flow
+below.
+
 ```mermaid
 flowchart TD
     A[Workflow run call] --> B[Runtime helper]
@@ -40,6 +44,16 @@ flowchart TD
 ```
 
 ## Step-by-step explanation
+
+### Runtime-adjacent graph export
+
+Before running a workflow, users can call `export_workflow_graph(...)` with a
+workflow class or instance.
+
+That path reads the same `WorkflowDefinition` and `StepDefinition` metadata used
+by the executor, validates the workflow definition, and returns a
+`WorkflowGraph`. It does not assign state, request approval, invoke steps, or
+resolve runtime route outputs.
 
 ### 1. The public `run(...)` entry point
 
@@ -243,5 +257,7 @@ The runtime currently does not support:
 - persistent approval pause/resume
 - distributed workers
 - observability pipelines
+- graph execution
+- dashboards or interactive visual editors
 
 That keeps the runtime small, explicit, and easy to reason about.
