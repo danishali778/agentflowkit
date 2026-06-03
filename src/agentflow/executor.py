@@ -149,6 +149,8 @@ def _build_approval_request(
 def _normalize_approval_decision(decision: ApprovalDecision | bool) -> ApprovalDecision:
     """Normalize supported approval handler responses into an ApprovalDecision."""
     if isinstance(decision, ApprovalDecision):
+        if not isinstance(decision.approved, bool):
+            raise ApprovalRequiredError("ApprovalDecision.approved must be a boolean.")
         return decision
     if isinstance(decision, bool):
         return ApprovalDecision(approved=decision)

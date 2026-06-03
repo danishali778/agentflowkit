@@ -138,6 +138,26 @@ def test_invalid_approval_handler_response_fails_clearly() -> None:
     assert result.steps[0].attempts == 0
 
 
+def test_invalid_approval_decision_state_fails_clearly() -> None:
+    """ApprovalDecision.approved must be a real boolean at runtime."""
+
+    @workflow
+    class RefundWorkflow:
+        @step(requires_approval=True)
+        def approve_refund(self) -> None:
+            self.state["called"] = True
+
+    result = RefundWorkflow().run(
+        {"called": False},
+        approval_handler=lambda _request: ApprovalDecision(approved="false"),
+    )
+
+    assert result.status is WorkflowStatus.FAILED
+    assert isinstance(result.error, ApprovalRequiredError)
+    assert "ApprovalDecision.approved must be a boolean" in str(result.error)
+    assert result.steps[0].attempts == 0
+
+
 def test_approval_handler_exception_fails_workflow() -> None:
     """Handler exceptions should fail the workflow without retrying the step."""
 
