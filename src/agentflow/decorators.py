@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Callable, TypeVar, overload
 
-from agentflow.models import StepDefinition, WorkflowDefinition
+from agentflow.models import (
+    ApprovalDecision,
+    ApprovalRequest,
+    RouteTarget,
+    StepDefinition,
+    WorkflowDefinition,
+)
 
 STEP_DEFINITION_ATTR = "__agentflow_step_definition__"
 WORKFLOW_DEFINITION_ATTR = "__agentflow_workflow_definition__"
@@ -28,6 +34,10 @@ def _build_step_definition(
     retry_on: tuple[type[BaseException], ...] | None,
     retry_delay: float | None,
     description: str | None,
+    routes: dict[str, RouteTarget] | None,
+    requires_approval: bool,
+    approval_message: str | None,
+    approval_metadata: dict[str, object] | None,
 ) -> StepDefinition:
     """Create step metadata for a decorated method.
 
@@ -42,6 +52,10 @@ def _build_step_definition(
         retry_on=retry_on,
         retry_delay=retry_delay,
         description=description,
+        routes=routes,
+        requires_approval=requires_approval,
+        approval_message=approval_message,
+        approval_metadata=approval_metadata,
     )
 
 
@@ -53,6 +67,10 @@ def _attach_step_metadata(
     retry_on: tuple[type[BaseException], ...] | None,
     retry_delay: float | None,
     description: str | None,
+    routes: dict[str, RouteTarget] | None,
+    requires_approval: bool,
+    approval_message: str | None,
+    approval_metadata: dict[str, object] | None,
 ) -> FunctionType:
     """Attach step metadata and return the original function unchanged."""
     setattr(
@@ -65,6 +83,10 @@ def _attach_step_metadata(
             retry_on=retry_on,
             retry_delay=retry_delay,
             description=description,
+            routes=routes,
+            requires_approval=requires_approval,
+            approval_message=approval_message,
+            approval_metadata=approval_metadata,
         ),
     )
     return function
@@ -125,10 +147,21 @@ def _attach_workflow_metadata(
 def _build_run_method() -> Callable[..., Any]:
     """Create the Phase 4 workflow run method injected by ``@workflow``."""
 
-    def run(self, state: object, *, raise_on_failure: bool = False) -> Any:
+    def run(
+        self,
+        state: object,
+        *,
+        raise_on_failure: bool = False,
+        approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+    ) -> Any:
         from agentflow.runtime import run_workflow
 
-        return run_workflow(self, state, raise_on_failure=raise_on_failure)
+        return run_workflow(
+            self,
+            state,
+            raise_on_failure=raise_on_failure,
+            approval_handler=approval_handler,
+        )
 
     run.__doc__ = "Run the workflow with the provided initial state."
     return run
@@ -146,6 +179,10 @@ def step(
     retry_on: tuple[type[BaseException], ...] | None = None,
     retry_delay: float | None = None,
     description: str | None = None,
+    routes: dict[str, RouteTarget] | None = None,
+    requires_approval: bool = False,
+    approval_message: str | None = None,
+    approval_metadata: dict[str, object] | None = None,
 ) -> Callable[[FunctionType], FunctionType]: ...
 
 
@@ -158,6 +195,10 @@ def step(
     retry_on: tuple[type[BaseException], ...] | None = None,
     retry_delay: float | None = None,
     description: str | None = None,
+    routes: dict[str, RouteTarget] | None = None,
+    requires_approval: bool = False,
+    approval_message: str | None = None,
+    approval_metadata: dict[str, object] | None = None,
 ) -> FunctionType | Callable[[FunctionType], FunctionType]:
     """Mark a method as a workflow step by attaching step metadata."""
     if function is not None:
@@ -168,6 +209,10 @@ def step(
             retry_on=retry_on,
             retry_delay=retry_delay,
             description=description,
+            routes=routes,
+            requires_approval=requires_approval,
+            approval_message=approval_message,
+            approval_metadata=approval_metadata,
         )
 
     def decorator(target: FunctionType) -> FunctionType:
@@ -178,6 +223,10 @@ def step(
             retry_on=retry_on,
             retry_delay=retry_delay,
             description=description,
+            routes=routes,
+            requires_approval=requires_approval,
+            approval_message=approval_message,
+            approval_metadata=approval_metadata,
         )
 
     return decorator

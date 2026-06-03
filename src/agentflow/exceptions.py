@@ -29,3 +29,11 @@ class WorkflowExecutionError(AgentFlowError):
 
 class StateValidationError(AgentFlowError):
     """Raised when a workflow receives invalid initial state."""
+
+
+class RouteResolutionError(AgentFlowError):
+    """Raised when a routed step returns an invalid route decision."""
+
+
+class ApprovalRequiredError(AgentFlowError):
+    """Raised when an approval-gated step cannot obtain approval."""

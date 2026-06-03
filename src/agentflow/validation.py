@@ -11,7 +11,7 @@ import inspect
 from collections.abc import Callable
 
 from agentflow.exceptions import StateValidationError, WorkflowDefinitionError
-from agentflow.models import StepDefinition, WorkflowDefinition
+from agentflow.models import END, StepDefinition, WorkflowDefinition
 
 _RESERVED_STEP_NAMES = {"run"}
 
@@ -78,8 +78,52 @@ def validate_step_definition(step: StepDefinition) -> StepDefinition:
         raise WorkflowDefinitionError(
             "Step retry_delay must be zero or greater when provided."
         )
+    if not isinstance(step.requires_approval, bool):
+        raise WorkflowDefinitionError("Step requires_approval must be a boolean.")
+    if step.approval_message is not None and (
+        not isinstance(step.approval_message, str) or not step.approval_message
+    ):
+        raise WorkflowDefinitionError(
+            "Step approval_message must be None or a non-empty string."
+        )
+    if step.approval_metadata is not None and not isinstance(step.approval_metadata, dict):
+        raise WorkflowDefinitionError("Step approval_metadata must be None or a dictionary.")
+    if step.routes is not None:
+        if not step.routes:
+            raise WorkflowDefinitionError("Step routes must not be empty when provided.")
+        for route_key, route_target in step.routes.items():
+            if not isinstance(route_key, str) or not route_key:
+                raise WorkflowDefinitionError("Step route keys must be non-empty strings.")
+            if route_target is END:
+                continue
+            if not isinstance(route_target, str) or not route_target:
+                raise WorkflowDefinitionError(
+                    "Step route targets must be non-empty step names or END."
+                )
 
     return step
+
+
+def _validate_route_targets(definition: WorkflowDefinition) -> None:
+    step_indexes = {step.name: index for index, step in enumerate(definition.steps)}
+
+    for source_index, step in enumerate(definition.steps):
+        if step.routes is None:
+            continue
+
+        for route_target in step.routes.values():
+            if route_target is END:
+                continue
+
+            target_index = step_indexes.get(route_target)
+            if target_index is None:
+                raise WorkflowDefinitionError(
+                    f"Route target {route_target!r} does not match a workflow step."
+                )
+            if target_index <= source_index:
+                raise WorkflowDefinitionError(
+                    f"Route target {route_target!r} must point to a later step."
+                )
 
 
 def validate_workflow_definition(definition: WorkflowDefinition) -> WorkflowDefinition:
@@ -101,6 +145,8 @@ def validate_workflow_definition(definition: WorkflowDefinition) -> WorkflowDefi
         if step.name in seen_step_names:
             raise WorkflowDefinitionError(f"Duplicate step name {step.name!r} is not allowed.")
         seen_step_names.add(step.name)
+
+    _validate_route_targets(definition)
 
     return definition
 
