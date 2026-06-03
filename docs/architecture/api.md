@@ -21,6 +21,12 @@ The current top-level public API is intentionally small:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowStartedEvent`
+- `StepStartedEvent`
+- `StepFinishedEvent`
+- `WorkflowFinishedEvent`
+- `WorkflowEvent`
+- `WorkflowHook`
 - `WorkflowGraph`
 - `WorkflowGraphNode`
 - `WorkflowGraphEdge`
@@ -32,9 +38,11 @@ The current top-level public API is intentionally small:
 - `StepExecutionError`
 - `StateValidationError`
 - `RouteResolutionError`
+- `HookExecutionError`
 
 That API shape is enough to define workflows, run them, inspect results, export
-workflow graphs, and reason about framework-specific failures.
+workflow graphs, observe lifecycle events, and reason about framework-specific
+failures.
 
 ## Public API in one diagram
 
@@ -50,10 +58,12 @@ flowchart TD
     A --> K[RouteDecision]
     A --> L[ApprovalRequest / ApprovalDecision]
     A --> M[Workflow graph export]
+    A --> N[Lifecycle hook events]
     B --> H[Workflow class authoring]
     C --> H
     H --> I[Run workflow]
     I --> D
+    I --> N
     D --> E
     H --> M
 ```
@@ -70,7 +80,8 @@ In the current MVP, it is responsible for:
 - collecting step definitions prepared by `@step`
 - preserving declaration order
 - injecting a `run(self, state, *, raise_on_failure=False,
-  approval_handler=None)` entry point unless the class already defines `run`
+  approval_handler=None, hooks=None)` entry point unless the class already
+  defines `run`
 
 This decorator is the main opt-in point for the workflow authoring model.
 
@@ -157,6 +168,39 @@ It currently includes:
 - `kind`
 - `route_key`
 
+## Workflow hooks API
+
+Workflow hooks are synchronous callbacks passed to `run(...)`.
+
+They let callers observe lifecycle events without changing workflow logic.
+
+```python
+from agentflow import WorkflowEvent
+
+
+def log_event(event: WorkflowEvent) -> None:
+    print(type(event).__name__)
+
+
+result = workflow_instance.run(state, hooks=[log_event])
+```
+
+Hook return values are ignored. Hook exceptions fail the workflow with
+`HookExecutionError`.
+
+### Event types
+
+The current hook event types are:
+
+- `WorkflowStartedEvent`
+- `StepStartedEvent`
+- `StepFinishedEvent`
+- `WorkflowFinishedEvent`
+
+`WorkflowEvent` is the union of those event types.
+
+`WorkflowHook` is the callable type used by the public API.
+
 ## Workflow authoring shape
 
 The current public authoring style looks like this:
@@ -199,7 +243,7 @@ This is the central shape of the current SDK:
 The main runtime entry point for users is:
 
 ```python
-workflow_instance.run(state, *, raise_on_failure=False)
+workflow_instance.run(state, *, raise_on_failure=False, hooks=None)
 ```
 
 Approval-gated workflows can also pass:
@@ -219,6 +263,10 @@ workflow_instance.run(state, approval_handler=handler)
   - optional callback for approval-gated steps
   - receives `ApprovalRequest`
   - returns `ApprovalDecision` or `bool`
+- `hooks`
+  - optional list or tuple of synchronous lifecycle callbacks
+  - each callback receives a `WorkflowEvent`
+  - hook return values are ignored
 
 ### Return value
 
@@ -365,6 +413,13 @@ Common causes include:
 - denied approval
 - invalid approval handler return value
 
+### `HookExecutionError`
+
+Raised when a lifecycle hook fails while handling a workflow or step event.
+
+Hook failures are framework failures because hooks run inside the synchronous
+workflow execution boundary.
+
 ### `StepExecutionError`
 
 This type is part of the public hierarchy, but the current MVP does not yet use
@@ -395,6 +450,7 @@ The current API does not yet expose higher-level workflow features such as:
 - async workflow APIs
 - persistence handles
 - persistent approval pause/resume
+- async event buses or tracing backends
 - graph execution APIs
 - dashboards or interactive visual editors
 - external orchestration adapters

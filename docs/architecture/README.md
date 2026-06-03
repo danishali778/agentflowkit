@@ -15,6 +15,7 @@ If you are new to the codebase, read these files in this order:
 
 - the main runtime building blocks
 - how a workflow moves from definition to execution
+- how lifecycle hooks observe execution
 - how workflow metadata can be exported as a graph
 - how state, validation, retries, and results fit together
 - what the current public API exposes

@@ -5,7 +5,7 @@
 Agent Workflow Kit is currently a small workflow runtime for building linear
 and forward-routed agent workflows with plain Python.
 
-At a high level, the implemented system has seven main parts:
+At a high level, the implemented system has eight main parts:
 
 - decorators
 - models
@@ -13,6 +13,7 @@ At a high level, the implemented system has seven main parts:
 - executor/runtime
 - retry helpers
 - route and approval helpers
+- lifecycle hooks
 - graph export
 
 ## Current architecture in one diagram
@@ -28,6 +29,7 @@ flowchart LR
     E --> F[Validation]
     E --> G[RetryPolicy resolution]
     E --> K[Approval callback]
+    E --> M[Lifecycle hooks]
     E --> J[Step invocation]
     J --> H[Route resolution]
     H --> I[WorkflowResult / StepResult]
@@ -63,6 +65,7 @@ These models describe:
 - runtime context
 - approval requests and decisions
 - route decisions
+- lifecycle hook events
 - step results
 - workflow results
 - status enums
@@ -141,7 +144,18 @@ Its job is to:
 - normalize boolean decisions into `ApprovalDecision`
 - stop the workflow before step invocation when approval is denied or missing
 
-### 7. Graph export layer
+### 7. Lifecycle hooks layer
+
+Lifecycle hooks live in `agentflow.hooks` and are emitted by the executor.
+
+Their job is to:
+
+- emit workflow started and finished events
+- emit step started and finished events
+- let users observe execution without changing workflow logic
+- fail explicitly with `HookExecutionError` when hook callbacks fail
+
+### 8. Graph export layer
 
 Graph export lives in `agentflow.graph`.
 
@@ -164,6 +178,7 @@ sequenceDiagram
     participant Validation
     participant Retry
     participant Approval
+    participant Hooks
     participant Graph
 
     User->>Workflow: define class with @workflow and @step
@@ -174,6 +189,7 @@ sequenceDiagram
     User->>Workflow: run(state)
     Workflow->>Executor: delegate to WorkflowExecutor
     Executor->>Validation: validate workflow and state
+    Executor->>Hooks: emit lifecycle events when configured
     Executor->>Approval: request approval when configured
     Executor->>Retry: resolve retry policy per step
     Executor->>Workflow: invoke step methods and resolve routes
@@ -188,6 +204,7 @@ The current architecture is intentionally:
 - linear by default
 - forward-routed when configured
 - approval-gated when configured
+- hook-observable when configured
 - graph-exportable before execution
 - stateful
 - explicit
@@ -208,6 +225,7 @@ The implemented architecture does not yet include:
 - async execution
 - persistence
 - persistent approval pause/resume
+- async event buses or tracing backends
 - distributed execution
 - graph execution
 - dashboards or interactive visual editors

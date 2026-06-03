@@ -17,7 +17,7 @@ If you are new to the project, start here:
   - including overview, runtime flow, and API structure
 - `guides/`
   - practical usage guides for writing workflows, handling retries,
-    branching, approvals, graph export, and inspecting results
+    branching, approvals, hooks, graph export, and inspecting results
 
 ## Reading path
 
@@ -40,4 +40,5 @@ Use the docs in this order depending on what you want:
   - [guides/inspecting-results.md](guides/inspecting-results.md)
   - [guides/branching-workflows.md](guides/branching-workflows.md)
   - [guides/human-approval.md](guides/human-approval.md)
+  - [guides/workflow-hooks.md](guides/workflow-hooks.md)
   - [guides/workflow-graphs.md](guides/workflow-graphs.md)
