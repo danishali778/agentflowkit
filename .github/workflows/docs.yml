@@ -40,6 +40,7 @@ jobs:
               "docs/guides/inspecting-results.md",
               "docs/guides/branching-workflows.md",
               "docs/guides/human-approval.md",
+              "docs/guides/workflow-graphs.md",
           ]
 
           missing = [path for path in expected if not Path(path).exists()]

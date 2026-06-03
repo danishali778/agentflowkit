@@ -26,6 +26,7 @@ The current MVP supports a clear and usable workflow authoring model:
 - synchronous step-by-step execution
 - conditional routing from one step to a later step or `END`
 - synchronous human approval callbacks before selected steps run
+- metadata-only workflow graph export
 - step retries with a fixed delay policy
 - validation for workflow definitions and step signatures
 - structured workflow and step result objects
@@ -49,6 +50,9 @@ The implemented runtime follows a simple model:
 8. Route decisions and skipped steps are recorded when branching is used.
 9. The runtime returns a structured `WorkflowResult`.
 
+Separately, users can export the declared workflow structure as a Mermaid graph
+without running the workflow.
+
 In practice, this makes the current SDK especially suitable for workflows such
 as:
 
@@ -71,6 +75,10 @@ The top-level `agentflow` package currently exposes the main MVP surface area:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowGraph`
+- `WorkflowGraphNode`
+- `WorkflowGraphEdge`
+- `export_workflow_graph`
 - `ApprovalRequiredError`
 - `RouteResolutionError`
 - framework-specific exception types
@@ -92,6 +100,7 @@ A workflow caller can inspect:
 - route decisions and skipped-step reasons for branching workflows
 - approval decisions for approval-gated steps
 - timing information for workflow and step execution
+- workflow graph nodes and edges before execution
 
 This gives the project immediate practical value even without dashboards or
 external tracing integrations, because the caller can already understand what
@@ -123,6 +132,7 @@ The repository includes runnable example workflows under `examples/`:
 - `content_review.py`
 - `branching_refund_workflow.py`
 - `approval_refund_workflow.py`
+- `graph_export.py`
 
 These examples demonstrate the implemented runtime rather than imaginary future
 features. Together they show:
@@ -133,6 +143,7 @@ features. Together they show:
 - retry behavior on transient failures
 - route-based branching with explicit terminal paths
 - human approval callbacks with approved and denied decisions
+- graph export with Mermaid rendering
 - inspection of final results and step-level details
 
 ## Current repository maturity
@@ -158,7 +169,8 @@ The current MVP does not yet include:
 - persistent approval pause/resume
 - worker backends
 - dashboards
-- workflow visualization
+- interactive visual editors
+- graph execution
 - framework adapters such as LangGraph integration
 
 These are future extensions, not hidden or partially implemented features.
@@ -175,5 +187,6 @@ early in scope. The current strength of the project is clarity:
 - a simple execution model
 - typed state plus ordered steps
 - branching, retries, validation, and structured results built into the runtime
+- graph export for inspecting workflow structure before execution
 
 That is the current status of the project today.
