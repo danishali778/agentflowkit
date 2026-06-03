@@ -1,4 +1,4 @@
-"""Compatibility wrapper for workflow graph inspection."""
+"""Workflow inspection helpers."""
 
 from agentflow.inspection.graph import (
     WorkflowGraph,

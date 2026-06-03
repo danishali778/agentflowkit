@@ -9,9 +9,9 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 
-from agentflow.executor import WorkflowExecutor
-from agentflow.hooks import WorkflowHook
+from agentflow.controls.hooks import WorkflowHook
 from agentflow.models import ApprovalDecision, ApprovalRequest, RunContext, WorkflowResult
+from agentflow.runtime.executor import WorkflowExecutor
 
 
 def _invoke_step(step_method, _workflow_instance: object, context: RunContext) -> object | None:
