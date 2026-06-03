@@ -15,17 +15,25 @@ flowchart TD
     D --> E[Validate workflow definition]
     E --> F[Validate initial state]
     F --> G[Assign self.state]
-    G --> H[Iterate through steps in order]
-    H --> I[Resolve retry policy]
+    G --> H[Iterate through steps by index]
+    H --> T{Approval required?}
+    T -- Yes --> U[Call approval handler]
+    U --> V{Approved?}
+    V -- No --> O[Create failed StepResult]
+    V -- Yes --> I[Resolve retry policy]
+    T -- No --> I
     I --> J[Invoke step]
     J --> K{Step succeeded?}
-    K -- Yes --> L[Create StepResult]
+    K -- Yes --> L[Resolve route if configured]
     K -- No --> M{Retry allowed?}
     M -- Yes --> N[Sleep and retry]
     N --> J
     M -- No --> O[Create failed StepResult]
     O --> P[Stop workflow]
-    L --> Q{More steps?}
+    L --> S{Route selected?}
+    S -- Later step --> H
+    S -- Terminal --> R
+    S -- No route --> Q{More steps?}
     Q -- Yes --> H
     Q -- No --> R[Build WorkflowResult]
     P --> R
@@ -35,7 +43,8 @@ flowchart TD
 
 ### 1. The public `run(...)` entry point
 
-The workflow class gets a `run(self, state, *, raise_on_failure=False)` method
+The workflow class gets a `run(self, state, *, raise_on_failure=False,
+approval_handler=None)` method
 from the `@workflow` decorator unless the class already defines its own `run`.
 
 That method delegates into `agentflow.runtime.run_workflow(...)`.
@@ -77,18 +86,53 @@ That means step methods read and mutate shared state directly through
 
 The current runtime does not copy or serialize the state object.
 
-### 6. Steps run in declaration order
+### 6. Steps run in declaration order unless routed
 
 The executor walks through the collected step definitions in the order the step
-methods were declared on the class.
+methods were declared on the class unless a routed step chooses a later step.
 
 For each step, it:
 
 - resolves the bound method
 - validates the unbound method signature
 - builds a `RunContext`
+- requests approval when the step requires it
 - resolves the effective `RetryPolicy`
 - invokes the step
+- resolves any declared route decision
+
+## Branching behavior
+
+Branching is opt-in per step through `@step(routes=...)`.
+
+For a routed step:
+
+1. the step returns a string route key
+2. the runtime looks up that key in the step route map
+3. the route target is either a later public step name or `END`
+4. the workflow jumps forward, or ends successfully
+
+Route decisions are recorded in `WorkflowResult.route_trace`.
+
+Declared but unvisited steps in branching workflows are represented by skipped
+`StepResult` entries with `attempts=0` and a `skipped_reason`.
+
+## Approval behavior
+
+Approval is opt-in per step through `@step(requires_approval=True, ...)`.
+
+For an approval-gated step:
+
+1. the executor builds an `ApprovalRequest`
+2. the user-provided `approval_handler` returns `ApprovalDecision` or `bool`
+3. approved decisions allow the step method to run
+4. denied, missing, or invalid approvals fail the workflow before step invocation
+
+Approval decisions are recorded on `StepResult.approval_decision`.
+
+Approval happens before retry handling. The approval handler is not retried in
+the current runtime, but the approved step method still uses normal retry
+behavior.
 
 ## Retry behavior
 
@@ -142,6 +186,9 @@ Each executed step records:
 - error
 - timestamps
 - duration
+- route key and next step when routing is used
+- skipped reason for synthesized skipped results
+- approval requirement and approval decision when approval is used
 
 ### `WorkflowResult`
 
@@ -154,6 +201,7 @@ The workflow result records:
 - the final error, if any
 - workflow-level timestamps
 - total duration
+- route trace
 
 ## Failure behavior
 
@@ -190,10 +238,9 @@ for the current MVP.
 
 The runtime currently does not support:
 
-- branching
-- skipped-step synthesis
 - async execution
 - workflow persistence
+- persistent approval pause/resume
 - distributed workers
 - observability pipelines
 

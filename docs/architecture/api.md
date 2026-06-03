@@ -17,11 +17,17 @@ The current top-level public API is intentionally small:
 - `WorkflowResult`
 - `StepResult`
 - `RetryPolicy`
+- `END`
+- `ApprovalRequest`
+- `ApprovalDecision`
+- `RouteDecision`
+- `ApprovalRequiredError`
 - `AgentFlowError`
 - `WorkflowDefinitionError`
 - `WorkflowExecutionError`
 - `StepExecutionError`
 - `StateValidationError`
+- `RouteResolutionError`
 
 That API shape is enough to define workflows, run them, inspect results, and
 reason about framework-specific failures.
@@ -36,6 +42,9 @@ flowchart TD
     A --> E[StepResult]
     A --> F[RetryPolicy]
     A --> G[Framework exceptions]
+    A --> J[END sentinel]
+    A --> K[RouteDecision]
+    A --> L[ApprovalRequest / ApprovalDecision]
     B --> H[Workflow class authoring]
     C --> H
     H --> I[Run workflow]
@@ -54,8 +63,8 @@ In the current MVP, it is responsible for:
 - attaching workflow metadata
 - collecting step definitions prepared by `@step`
 - preserving declaration order
-- injecting a `run(self, state, *, raise_on_failure=False)` entry point unless
-  the class already defines `run`
+- injecting a `run(self, state, *, raise_on_failure=False,
+  approval_handler=None)` entry point unless the class already defines `run`
 
 This decorator is the main opt-in point for the workflow authoring model.
 
@@ -69,9 +78,24 @@ Today it supports:
 - optional custom step naming
 - optional description metadata
 - optional retry overrides
+- optional route maps for conditional branching
+- optional approval metadata for approval-gated steps
 
 At the authoring level, this means a user can keep step logic as plain Python
 methods while still giving the runtime structured metadata to execute them.
+
+Approval options currently include:
+
+- `requires_approval`
+- `approval_message`
+- `approval_metadata`
+
+### `END`
+
+`END` is the public terminal route sentinel.
+
+Use it in step route maps when a branch should complete the workflow
+successfully instead of moving to another step.
 
 ## Workflow authoring shape
 
@@ -118,6 +142,12 @@ The main runtime entry point for users is:
 workflow_instance.run(state, *, raise_on_failure=False)
 ```
 
+Approval-gated workflows can also pass:
+
+```python
+workflow_instance.run(state, approval_handler=handler)
+```
+
 ### Parameters
 
 - `state`
@@ -125,6 +155,10 @@ workflow_instance.run(state, *, raise_on_failure=False)
 - `raise_on_failure`
   - when `False`, the runtime returns a failed `WorkflowResult`
   - when `True`, the runtime raises `WorkflowExecutionError` after failure
+- `approval_handler`
+  - optional callback for approval-gated steps
+  - receives `ApprovalRequest`
+  - returns `ApprovalDecision` or `bool`
 
 ### Return value
 
@@ -148,6 +182,7 @@ It currently includes:
 - `started_at`
 - `finished_at`
 - `duration_ms`
+- `route_trace`
 
 This gives the caller access to both the final business state and the runtime
 execution story.
@@ -166,9 +201,49 @@ It currently includes:
 - `started_at`
 - `finished_at`
 - `duration_ms`
+- `route_key`
+- `next_step`
+- `skipped_reason`
+- `approval_required`
+- `approval_decision`
 
 This is what makes the current MVP useful for debugging and inspection even
 without a dashboard.
+
+### `RouteDecision`
+
+`RouteDecision` records one route choice made by a routed step.
+
+It currently includes:
+
+- `step_name`
+- `route_key`
+- `next_step`
+- `ended`
+
+### `ApprovalRequest`
+
+`ApprovalRequest` is passed to an approval handler before an approval-gated
+step runs.
+
+It currently includes:
+
+- `workflow_name`
+- `step_name`
+- `run_id`
+- `state`
+- `message`
+- `metadata`
+
+### `ApprovalDecision`
+
+`ApprovalDecision` records the handler decision.
+
+It currently includes:
+
+- `approved`
+- `reason`
+- `metadata`
 
 ## Retry API
 
@@ -215,6 +290,21 @@ Raised when a workflow fails and the caller requested
 
 Raised when the initial workflow state is invalid for execution.
 
+### `RouteResolutionError`
+
+Raised when a routed step returns an invalid route key, such as an unknown key
+or a non-string value.
+
+### `ApprovalRequiredError`
+
+Raised when an approval-gated step cannot obtain approval.
+
+Common causes include:
+
+- missing approval handler
+- denied approval
+- invalid approval handler return value
+
 ### `StepExecutionError`
 
 This type is part of the public hierarchy, but the current MVP does not yet use
@@ -242,10 +332,9 @@ evolution.
 
 The current API does not yet expose higher-level workflow features such as:
 
-- branching constructs
-- approval steps
 - async workflow APIs
 - persistence handles
+- persistent approval pause/resume
 - visualization APIs
 - external orchestration adapters
 

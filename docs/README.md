@@ -16,8 +16,8 @@ If you are new to the project, start here:
   - the deeper technical architecture of the current SDK runtime
   - including overview, runtime flow, and API structure
 - `guides/`
-  - practical usage guides for writing workflows, handling retries, and
-    inspecting results
+  - practical usage guides for writing workflows, handling retries,
+    branching, approvals, and inspecting results
 
 ## Reading path
 
@@ -38,3 +38,5 @@ Use the docs in this order depending on what you want:
   - [guides/first-workflow.md](guides/first-workflow.md)
   - [guides/retries-and-failures.md](guides/retries-and-failures.md)
   - [guides/inspecting-results.md](guides/inspecting-results.md)
+  - [guides/branching-workflows.md](guides/branching-workflows.md)
+  - [guides/human-approval.md](guides/human-approval.md)
