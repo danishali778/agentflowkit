@@ -4,12 +4,14 @@ import pytest
 
 from agentflow.exceptions import (
     AgentFlowError,
+    ApprovalRequiredError,
+    RouteResolutionError,
     StateValidationError,
     StepExecutionError,
     WorkflowDefinitionError,
     WorkflowExecutionError,
 )
-from agentflow.models import StepDefinition, WorkflowDefinition
+from agentflow.models import END, StepDefinition, WorkflowDefinition
 from agentflow.validation import (
     validate_initial_state,
     validate_step_definition,
@@ -29,6 +31,8 @@ def test_framework_exceptions_follow_the_documented_hierarchy() -> None:
     assert issubclass(StateValidationError, AgentFlowError)
     assert issubclass(StepExecutionError, AgentFlowError)
     assert issubclass(WorkflowExecutionError, AgentFlowError)
+    assert issubclass(RouteResolutionError, AgentFlowError)
+    assert issubclass(ApprovalRequiredError, AgentFlowError)
 
 
 def test_valid_workflow_definition_is_returned_unchanged() -> None:
@@ -135,6 +139,130 @@ def test_invalid_step_order_and_reserved_step_name_fail_validation() -> None:
         validate_step_definition(reserved_name_step)
     with pytest.raises(WorkflowDefinitionError, match="method name"):
         validate_step_definition(reserved_method_name_step)
+
+
+def test_invalid_route_metadata_raises_definition_errors() -> None:
+    """Route mappings must use non-empty string keys and valid targets."""
+    empty_routes = StepDefinition(
+        name="evaluate_refund",
+        method_name="evaluate_refund",
+        order=0,
+        routes={},
+    )
+    invalid_key = StepDefinition(
+        name="evaluate_refund",
+        method_name="evaluate_refund",
+        order=0,
+        routes={"": "approve_refund"},
+    )
+    invalid_target = StepDefinition(
+        name="evaluate_refund",
+        method_name="evaluate_refund",
+        order=0,
+        routes={"approved": ""},
+    )
+
+    with pytest.raises(WorkflowDefinitionError, match="must not be empty"):
+        validate_step_definition(empty_routes)
+    with pytest.raises(WorkflowDefinitionError, match="route keys"):
+        validate_step_definition(invalid_key)
+    with pytest.raises(WorkflowDefinitionError, match="route targets"):
+        validate_step_definition(invalid_target)
+
+
+def test_invalid_approval_metadata_raises_definition_errors() -> None:
+    """Approval configuration should reject malformed metadata."""
+    invalid_requires_approval = StepDefinition(
+        name="approve_refund",
+        method_name="approve_refund",
+        order=0,
+        requires_approval="yes",
+    )
+    invalid_message = StepDefinition(
+        name="approve_refund",
+        method_name="approve_refund",
+        order=0,
+        requires_approval=True,
+        approval_message="",
+    )
+    invalid_metadata = StepDefinition(
+        name="approve_refund",
+        method_name="approve_refund",
+        order=0,
+        requires_approval=True,
+        approval_metadata=("minimum_role", "manager"),
+    )
+
+    with pytest.raises(WorkflowDefinitionError, match="requires_approval"):
+        validate_step_definition(invalid_requires_approval)
+    with pytest.raises(WorkflowDefinitionError, match="approval_message"):
+        validate_step_definition(invalid_message)
+    with pytest.raises(WorkflowDefinitionError, match="approval_metadata"):
+        validate_step_definition(invalid_metadata)
+
+
+def test_route_targets_must_exist_and_point_forward() -> None:
+    """Route targets should reference later public step names or END."""
+    routed_step = StepDefinition(
+        name="evaluate_refund",
+        method_name="evaluate_refund",
+        order=0,
+        routes={"approved": "approve_refund", "done": END},
+    )
+    approve_step = StepDefinition(
+        name="approve_refund",
+        method_name="approve_refund",
+        order=1,
+    )
+    valid_definition = WorkflowDefinition(
+        name="refund_workflow",
+        steps=[routed_step, approve_step],
+    )
+
+    assert validate_workflow_definition(valid_definition) is valid_definition
+
+    unknown_target = WorkflowDefinition(
+        name="refund_workflow",
+        steps=[
+            StepDefinition(
+                name="evaluate_refund",
+                method_name="evaluate_refund",
+                order=0,
+                routes={"approved": "missing_step"},
+            ),
+            approve_step,
+        ],
+    )
+    self_route = WorkflowDefinition(
+        name="refund_workflow",
+        steps=[
+            StepDefinition(
+                name="evaluate_refund",
+                method_name="evaluate_refund",
+                order=0,
+                routes={"again": "evaluate_refund"},
+            )
+        ],
+    )
+    backward_route = WorkflowDefinition(
+        name="refund_workflow",
+        steps=[
+            StepDefinition(name="check_order", method_name="check_order", order=0),
+            StepDefinition(
+                name="evaluate_refund",
+                method_name="evaluate_refund",
+                order=1,
+                routes={"restart": "check_order"},
+            ),
+        ],
+    )
+
+    with pytest.raises(WorkflowDefinitionError, match="does not match"):
+        validate_workflow_definition(unknown_target)
+    with pytest.raises(WorkflowDefinitionError, match="later step"):
+        validate_workflow_definition(self_route)
+    with pytest.raises(WorkflowDefinitionError, match="later step"):
+        validate_workflow_definition(backward_route)
 
 
 def test_valid_step_method_signatures_are_supported() -> None:

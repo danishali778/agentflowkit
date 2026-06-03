@@ -5,12 +5,18 @@ from datetime import datetime
 import agentflow
 from agentflow.exceptions import (
     AgentFlowError,
+    ApprovalRequiredError,
+    RouteResolutionError,
     StateValidationError,
     StepExecutionError,
     WorkflowDefinitionError,
     WorkflowExecutionError,
 )
 from agentflow.models import (
+    END,
+    ApprovalDecision,
+    ApprovalRequest,
+    RouteDecision,
     RunContext,
     StepDefinition,
     StepResult,
@@ -49,6 +55,10 @@ def test_step_definition_supports_defaults_and_explicit_retry_metadata() -> None
     assert default_step.retry_on is None
     assert default_step.retry_delay is None
     assert default_step.description is None
+    assert default_step.routes is None
+    assert default_step.requires_approval is False
+    assert default_step.approval_message is None
+    assert default_step.approval_metadata is None
 
     assert configured_step.name == "verify_policy"
     assert configured_step.method_name == "verify_policy"
@@ -74,6 +84,55 @@ def test_run_context_stores_workflow_and_step_metadata() -> None:
     assert context.step_name == "verify_policy"
 
 
+def test_approval_models_capture_request_and_decision_payloads() -> None:
+    """Approval payloads should expose handler inputs and normalized decisions."""
+    state = {"amount": 250.0}
+    request = ApprovalRequest(
+        workflow_name="refund_workflow",
+        step_name="approve_refund",
+        run_id="run-123",
+        state=state,
+        message="Manager approval required.",
+        metadata={"minimum_role": "manager"},
+    )
+    decision = ApprovalDecision(
+        approved=True,
+        reason="Within manager approval policy.",
+        metadata={"approver": "sam"},
+    )
+
+    assert request.workflow_name == "refund_workflow"
+    assert request.step_name == "approve_refund"
+    assert request.run_id == "run-123"
+    assert request.state is state
+    assert request.message == "Manager approval required."
+    assert request.metadata == {"minimum_role": "manager"}
+    assert decision.approved is True
+    assert decision.reason == "Within manager approval policy."
+    assert decision.metadata == {"approver": "sam"}
+
+
+def test_route_decision_model_captures_branch_metadata() -> None:
+    """Route decisions should describe the path chosen by routed steps."""
+    decision = RouteDecision(
+        step_name="evaluate_refund",
+        route_key="approved",
+        next_step="approve_refund",
+    )
+    terminal_decision = RouteDecision(
+        step_name="archive_ticket",
+        route_key="done",
+        ended=True,
+    )
+
+    assert decision.step_name == "evaluate_refund"
+    assert decision.route_key == "approved"
+    assert decision.next_step == "approve_refund"
+    assert decision.ended is False
+    assert terminal_decision.next_step is None
+    assert terminal_decision.ended is True
+
+
 def test_result_models_store_status_payloads_and_timing_fields() -> None:
     """Step and workflow results should preserve the documented execution fields."""
     started_at = datetime(2026, 1, 1, 12, 0, 0)
@@ -88,16 +147,31 @@ def test_result_models_store_status_payloads_and_timing_fields() -> None:
         started_at=started_at,
         finished_at=finished_at,
         duration_ms=1000,
+        route_key="denied",
+        next_step="deny_refund",
+        approval_required=True,
+        approval_decision=ApprovalDecision(approved=True, reason="Approved by manager."),
+    )
+    skipped_result = StepResult(
+        step_name="approve_refund",
+        status=StepStatus.SKIPPED,
+        skipped_reason="not selected by route",
+    )
+    route_decision = RouteDecision(
+        step_name="generate_response",
+        route_key="denied",
+        next_step="deny_refund",
     )
     workflow_result = WorkflowResult(
         workflow_name="refund_workflow",
         state={"approved": False},
         status=WorkflowStatus.FAILED,
-        steps=[step_result],
+        steps=[step_result, skipped_result],
         error=step_error,
         started_at=started_at,
         finished_at=finished_at,
         duration_ms=1000,
+        route_trace=[route_decision],
     )
 
     assert step_result.step_name == "generate_response"
@@ -109,16 +183,26 @@ def test_result_models_store_status_payloads_and_timing_fields() -> None:
     assert step_result.finished_at == finished_at
     assert step_result.finished_at >= step_result.started_at
     assert step_result.duration_ms == 1000
+    assert step_result.route_key == "denied"
+    assert step_result.next_step == "deny_refund"
+    assert step_result.skipped_reason is None
+    assert step_result.approval_required is True
+    assert step_result.approval_decision == ApprovalDecision(
+        approved=True,
+        reason="Approved by manager.",
+    )
+    assert skipped_result.skipped_reason == "not selected by route"
 
     assert workflow_result.workflow_name == "refund_workflow"
     assert workflow_result.state == {"approved": False}
     assert workflow_result.status is WorkflowStatus.FAILED
-    assert workflow_result.steps == [step_result]
+    assert workflow_result.steps == [step_result, skipped_result]
     assert workflow_result.error is step_error
     assert workflow_result.started_at == started_at
     assert workflow_result.finished_at == finished_at
     assert workflow_result.finished_at >= workflow_result.started_at
     assert workflow_result.duration_ms == 1000
+    assert workflow_result.route_trace == [route_decision]
 
 
 def test_status_enums_expose_documented_values() -> None:
@@ -152,6 +236,11 @@ def test_result_and_context_defaults_support_later_runtime_population() -> None:
     assert step_result.started_at is None
     assert step_result.finished_at is None
     assert step_result.duration_ms == 0
+    assert step_result.route_key is None
+    assert step_result.next_step is None
+    assert step_result.skipped_reason is None
+    assert step_result.approval_required is False
+    assert step_result.approval_decision is None
 
     assert workflow_result.status is WorkflowStatus.PENDING
     assert workflow_result.steps == []
@@ -159,6 +248,7 @@ def test_result_and_context_defaults_support_later_runtime_population() -> None:
     assert workflow_result.started_at is None
     assert workflow_result.finished_at is None
     assert workflow_result.duration_ms == 0
+    assert workflow_result.route_trace == []
 
 
 def test_top_level_result_and_exception_exports_match_submodules() -> None:
@@ -166,6 +256,8 @@ def test_top_level_result_and_exception_exports_match_submodules() -> None:
     assert agentflow.WorkflowResult is WorkflowResult
     assert agentflow.StepResult is StepResult
     assert agentflow.AgentFlowError is AgentFlowError
+    assert agentflow.ApprovalRequiredError is ApprovalRequiredError
+    assert agentflow.RouteResolutionError is RouteResolutionError
     assert agentflow.WorkflowDefinitionError is WorkflowDefinitionError
     assert agentflow.StepExecutionError is StepExecutionError
     assert agentflow.WorkflowExecutionError is WorkflowExecutionError
@@ -176,6 +268,12 @@ def test_public_api_all_contains_only_the_expected_phase_five_symbols() -> None:
     """The top-level package should expose only the intended Phase 5 names."""
     expected_exports = {
         "AgentFlowError",
+        "ApprovalDecision",
+        "ApprovalRequest",
+        "ApprovalRequiredError",
+        "END",
+        "RouteDecision",
+        "RouteResolutionError",
         "RetryPolicy",
         "StateValidationError",
         "StepExecutionError",
@@ -190,6 +288,10 @@ def test_public_api_all_contains_only_the_expected_phase_five_symbols() -> None:
 
     assert set(agentflow.__all__) == expected_exports
     assert agentflow.__version__ == "0.1.0"
+    assert agentflow.END is END
+    assert agentflow.ApprovalDecision is ApprovalDecision
+    assert agentflow.ApprovalRequest is ApprovalRequest
+    assert agentflow.RouteDecision is RouteDecision
     assert "WorkflowDefinition" not in agentflow.__all__
     assert "StepDefinition" not in agentflow.__all__
     assert "RunContext" not in agentflow.__all__
