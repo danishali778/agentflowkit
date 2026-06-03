@@ -7,11 +7,11 @@ advanced concerns like retries are layered in later phases.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from agentflow.approvals import ApprovalHandler, request_step_approval
 from agentflow.decorators import WORKFLOW_DEFINITION_ATTR
 from agentflow.exceptions import (
     ApprovalRequiredError,
@@ -29,19 +29,16 @@ from agentflow.hooks import (
     emit_hooks,
 )
 from agentflow.models import (
-    END,
     ApprovalDecision,
-    ApprovalRequest,
     RouteDecision,
     RunContext,
-    StepDefinition,
     StepResult,
     StepStatus,
-    WorkflowDefinition,
     WorkflowResult,
     WorkflowStatus,
 )
 from agentflow.retry import resolve_retry_policy, should_retry, sleep_for_retry
+from agentflow.routing import finalize_step_results, resolve_route_decision
 from agentflow.validation import (
     validate_initial_state,
     validate_step_method_signature,
@@ -59,140 +56,6 @@ def _duration_ms(started_at: datetime, finished_at: datetime) -> int:
     return max(0, int((finished_at - started_at).total_seconds() * 1000))
 
 
-def _workflow_uses_routes(workflow_definition: WorkflowDefinition) -> bool:
-    """Return whether a workflow declares any route metadata."""
-    return any(step.routes is not None for step in workflow_definition.steps)
-
-
-def _build_skipped_result(step_definition: StepDefinition, reason: str) -> StepResult:
-    """Create a synthesized skipped result for a declared but unvisited step."""
-    return StepResult(
-        step_name=step_definition.name,
-        status=StepStatus.SKIPPED,
-        attempts=0,
-        output=None,
-        error=None,
-        skipped_reason=reason,
-        approval_required=step_definition.requires_approval,
-    )
-
-
-def _finalize_step_results(
-    workflow_definition: WorkflowDefinition,
-    executed_results: dict[int, StepResult],
-    *,
-    skipped_reason: str,
-) -> list[StepResult]:
-    """Return declaration-ordered results, filling route-unvisited steps as skipped."""
-    if not _workflow_uses_routes(workflow_definition):
-        return list(executed_results.values())
-
-    results: list[StepResult] = []
-    for index, step_definition in enumerate(workflow_definition.steps):
-        result = executed_results.get(index)
-        if result is None:
-            result = _build_skipped_result(step_definition, skipped_reason)
-        results.append(result)
-    return results
-
-
-def _resolve_route_decision(
-    step_definition: StepDefinition,
-    output: object,
-    step_indexes: dict[str, int],
-) -> tuple[RouteDecision, int | None]:
-    """Resolve a successful step output into a route decision and next index."""
-    if step_definition.routes is None:
-        return RouteDecision(step_name=step_definition.name, route_key="", next_step=None), None
-
-    if not isinstance(output, str):
-        raise RouteResolutionError(
-            f"Step {step_definition.name!r} returned a non-string route key."
-        )
-
-    route_target = step_definition.routes.get(output)
-    if route_target is None:
-        raise RouteResolutionError(
-            f"Step {step_definition.name!r} returned unknown route key {output!r}."
-        )
-
-    if route_target is END:
-        return (
-            RouteDecision(
-                step_name=step_definition.name,
-                route_key=output,
-                next_step=None,
-                ended=True,
-            ),
-            None,
-        )
-
-    return (
-        RouteDecision(
-            step_name=step_definition.name,
-            route_key=output,
-            next_step=route_target,
-            ended=False,
-        ),
-        step_indexes[route_target],
-    )
-
-
-def _build_approval_request(
-    workflow_definition: WorkflowDefinition,
-    step_definition: StepDefinition,
-    *,
-    run_id: str,
-    state: object,
-) -> ApprovalRequest:
-    """Create the approval payload passed to user approval handlers."""
-    return ApprovalRequest(
-        workflow_name=workflow_definition.name,
-        step_name=step_definition.name,
-        run_id=run_id,
-        state=state,
-        message=step_definition.approval_message,
-        metadata=dict(step_definition.approval_metadata or {}),
-    )
-
-
-def _normalize_approval_decision(decision: ApprovalDecision | bool) -> ApprovalDecision:
-    """Normalize supported approval handler responses into an ApprovalDecision."""
-    if isinstance(decision, ApprovalDecision):
-        if not isinstance(decision.approved, bool):
-            raise ApprovalRequiredError("ApprovalDecision.approved must be a boolean.")
-        return decision
-    if isinstance(decision, bool):
-        return ApprovalDecision(approved=decision)
-
-    raise ApprovalRequiredError(
-        "Approval handlers must return an ApprovalDecision or a boolean."
-    )
-
-
-def _request_step_approval(
-    workflow_definition: WorkflowDefinition,
-    step_definition: StepDefinition,
-    *,
-    run_id: str,
-    state: object,
-    approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None,
-) -> ApprovalDecision:
-    """Request approval for an approval-gated step."""
-    if approval_handler is None:
-        raise ApprovalRequiredError(
-            f"Step {step_definition.name!r} requires approval but no approval handler was provided."
-        )
-
-    approval_request = _build_approval_request(
-        workflow_definition,
-        step_definition,
-        run_id=run_id,
-        state=state,
-    )
-    return _normalize_approval_decision(approval_handler(approval_request))
-
-
 class WorkflowExecutor:
     """Execute a workflow instance using the current MVP runtime contract."""
 
@@ -202,7 +65,7 @@ class WorkflowExecutor:
         state: object,
         *,
         raise_on_failure: bool = False,
-        approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+        approval_handler: ApprovalHandler | None = None,
         hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None = None,
     ) -> WorkflowResult:
         """Run a workflow instance and return its structured execution result."""
@@ -335,7 +198,7 @@ class WorkflowExecutor:
 
             if step_definition.requires_approval:
                 try:
-                    approval_decision = _request_step_approval(
+                    approval_decision = request_step_approval(
                         validated_definition,
                         step_definition,
                         run_id=run_id,
@@ -415,7 +278,7 @@ class WorkflowExecutor:
 
                 step_finished_at = _utc_now()
                 try:
-                    route_decision, routed_step_index = _resolve_route_decision(
+                    route_decision, routed_step_index = resolve_route_decision(
                         step_definition,
                         output,
                         step_indexes,
@@ -483,7 +346,7 @@ class WorkflowExecutor:
             if workflow_error is None
             else "not reached because workflow failed"
         )
-        step_results = _finalize_step_results(
+        step_results = finalize_step_results(
             validated_definition,
             executed_results,
             skipped_reason=skipped_reason,
