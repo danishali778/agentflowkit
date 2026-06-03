@@ -17,6 +17,7 @@ Today, the SDK already supports:
 - retry handling for transient failures
 - conditional branching with explicit route maps
 - synchronous human approval callbacks
+- synchronous lifecycle hooks for logging and observability
 - workflow graph export as Mermaid diagrams
 - structured `WorkflowResult` and `StepResult`
 - optional `raise_on_failure=True`
@@ -28,6 +29,7 @@ This makes the project useful today for linear agent-style workflows such as:
 - content review
 - branching refund decisions
 - approval-gated refund decisions
+- hook-based execution logging
 - workflow graph inspection
 - internal multi-step automations
 
@@ -95,6 +97,7 @@ The current SDK already gives you:
 - ordered workflow execution
 - conditional routing to later steps or `END`
 - human approval callbacks before selected steps run
+- lifecycle hooks for workflow and step events
 - step-level retries with fixed delay
 - validation for workflow definitions and step signatures
 - framework-specific exceptions
@@ -113,10 +116,17 @@ The public `agentflow` package currently exposes:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowStartedEvent`
+- `StepStartedEvent`
+- `StepFinishedEvent`
+- `WorkflowFinishedEvent`
+- `WorkflowEvent`
+- `WorkflowHook`
 - `WorkflowGraph`
 - `WorkflowGraphNode`
 - `WorkflowGraphEdge`
 - `export_workflow_graph`
+- `HookExecutionError`
 - `ApprovalRequiredError`
 - `RouteResolutionError`
 - framework exception types
@@ -208,6 +218,22 @@ python examples/approval_refund_workflow.py
 
 See: [examples/approval_refund_workflow.py](examples/approval_refund_workflow.py)
 
+### Workflow hooks
+
+This example shows:
+
+- synchronous lifecycle hooks
+- workflow and step event logging
+- normal result inspection after hooks run
+
+Run it with:
+
+```bash
+python examples/workflow_hooks.py
+```
+
+See: [examples/workflow_hooks.py](examples/workflow_hooks.py)
+
 ### Graph export workflow
 
 This example shows:
@@ -251,6 +277,7 @@ python examples/support_triage.py
 python examples/content_review.py
 python examples/branching_refund_workflow.py
 python examples/approval_refund_workflow.py
+python examples/workflow_hooks.py
 python examples/graph_export.py
 ```
 
@@ -286,6 +313,7 @@ The current SDK does not yet include:
 
 - async execution
 - persistent approval pause/resume
+- async event buses or tracing backends
 - worker backends
 - dashboards or interactive visual editors
 - graph execution

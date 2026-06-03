@@ -10,6 +10,7 @@ import inspect
 from collections.abc import Callable
 
 from agentflow.executor import WorkflowExecutor
+from agentflow.hooks import WorkflowHook
 from agentflow.models import ApprovalDecision, ApprovalRequest, RunContext, WorkflowResult
 
 
@@ -30,6 +31,7 @@ def run_workflow(
     *,
     raise_on_failure: bool = False,
     approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+    hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None = None,
 ) -> WorkflowResult:
     """Delegate workflow execution to the MVP executor."""
     return WorkflowExecutor().run(
@@ -37,4 +39,5 @@ def run_workflow(
         state,
         raise_on_failure=raise_on_failure,
         approval_handler=approval_handler,
+        hooks=hooks,
     )

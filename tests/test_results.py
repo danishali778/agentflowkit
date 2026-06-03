@@ -6,6 +6,7 @@ import agentflow
 from agentflow.exceptions import (
     AgentFlowError,
     ApprovalRequiredError,
+    HookExecutionError,
     RouteResolutionError,
     StateValidationError,
     StepExecutionError,
@@ -262,6 +263,7 @@ def test_top_level_result_and_exception_exports_match_submodules() -> None:
     assert agentflow.StepExecutionError is StepExecutionError
     assert agentflow.WorkflowExecutionError is WorkflowExecutionError
     assert agentflow.StateValidationError is StateValidationError
+    assert agentflow.HookExecutionError is HookExecutionError
 
 
 def test_public_api_all_contains_only_the_expected_symbols() -> None:
@@ -272,17 +274,24 @@ def test_public_api_all_contains_only_the_expected_symbols() -> None:
         "ApprovalRequest",
         "ApprovalRequiredError",
         "END",
+        "HookExecutionError",
         "RouteDecision",
         "RouteResolutionError",
         "RetryPolicy",
         "StateValidationError",
+        "StepFinishedEvent",
+        "StepStartedEvent",
         "StepExecutionError",
         "StepResult",
+        "WorkflowEvent",
+        "WorkflowFinishedEvent",
         "WorkflowDefinitionError",
         "WorkflowExecutionError",
         "WorkflowGraph",
         "WorkflowGraphEdge",
         "WorkflowGraphNode",
+        "WorkflowHook",
+        "WorkflowStartedEvent",
         "WorkflowResult",
         "__version__",
         "export_workflow_graph",

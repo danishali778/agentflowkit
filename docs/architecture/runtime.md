@@ -19,8 +19,10 @@ flowchart TD
     D --> E[Validate workflow definition]
     E --> F[Validate initial state]
     F --> G[Assign self.state]
-    G --> H[Iterate through steps by index]
-    H --> T{Approval required?}
+    G --> W[Emit WorkflowStartedEvent if hooks configured]
+    W --> H[Iterate through steps by index]
+    H --> X[Emit StepStartedEvent if hooks configured]
+    X --> T{Approval required?}
     T -- Yes --> U[Call approval handler]
     U --> V{Approved?}
     V -- No --> O[Create failed StepResult]
@@ -33,14 +35,17 @@ flowchart TD
     M -- Yes --> N[Sleep and retry]
     N --> J
     M -- No --> O[Create failed StepResult]
-    O --> P[Stop workflow]
-    L --> S{Route selected?}
+    O --> YF[Emit StepFinishedEvent if hooks configured]
+    YF --> P[Stop workflow]
+    L --> YS[Emit StepFinishedEvent if hooks configured]
+    YS --> S{Route selected?}
     S -- Later step --> H
     S -- Terminal --> R
     S -- No route --> Q{More steps?}
     Q -- Yes --> H
     Q -- No --> R[Build WorkflowResult]
     P --> R
+    R --> Z[Emit WorkflowFinishedEvent if hooks configured]
 ```
 
 ## Step-by-step explanation
@@ -58,7 +63,7 @@ resolve runtime route outputs.
 ### 1. The public `run(...)` entry point
 
 The workflow class gets a `run(self, state, *, raise_on_failure=False,
-approval_handler=None)` method
+approval_handler=None, hooks=None)` method
 from the `@workflow` decorator unless the class already defines its own `run`.
 
 That method delegates into `agentflow.runtime.run_workflow(...)`.
@@ -110,10 +115,30 @@ For each step, it:
 - resolves the bound method
 - validates the unbound method signature
 - builds a `RunContext`
+- emits step lifecycle events when hooks are configured
 - requests approval when the step requires it
 - resolves the effective `RetryPolicy`
 - invokes the step
 - resolves any declared route decision
+
+## Hook behavior
+
+Lifecycle hooks are optional synchronous callbacks passed through `run(...)`.
+
+When configured, the runtime emits:
+
+- `WorkflowStartedEvent`
+- `StepStartedEvent`
+- `StepFinishedEvent`
+- `WorkflowFinishedEvent`
+
+Hooks are called in the order provided. Their return values are ignored.
+
+If a hook raises an exception, the workflow fails with `HookExecutionError`.
+With `raise_on_failure=True`, that failure is wrapped in
+`WorkflowExecutionError`.
+
+Hooks are not retried and are not an async event bus or tracing backend.
 
 ## Branching behavior
 
@@ -256,7 +281,7 @@ The runtime currently does not support:
 - workflow persistence
 - persistent approval pause/resume
 - distributed workers
-- observability pipelines
+- async event buses or external tracing backends
 - graph execution
 - dashboards or interactive visual editors
 

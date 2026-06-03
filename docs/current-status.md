@@ -26,6 +26,7 @@ The current MVP supports a clear and usable workflow authoring model:
 - synchronous step-by-step execution
 - conditional routing from one step to a later step or `END`
 - synchronous human approval callbacks before selected steps run
+- synchronous lifecycle hooks for observing workflow execution
 - metadata-only workflow graph export
 - step retries with a fixed delay policy
 - validation for workflow definitions and step signatures
@@ -47,8 +48,9 @@ The implemented runtime follows a simple model:
 5. Each step can mutate shared workflow state.
 6. Approval handlers are called before approval-gated steps run.
 7. Retry behavior is applied when configured.
-8. Route decisions and skipped steps are recorded when branching is used.
-9. The runtime returns a structured `WorkflowResult`.
+8. Lifecycle hooks are emitted when configured.
+9. Route decisions and skipped steps are recorded when branching is used.
+10. The runtime returns a structured `WorkflowResult`.
 
 Separately, users can export the declared workflow structure as a Mermaid graph
 without running the workflow.
@@ -75,12 +77,19 @@ The top-level `agentflow` package currently exposes the main MVP surface area:
 - `ApprovalRequest`
 - `ApprovalDecision`
 - `RouteDecision`
+- `WorkflowStartedEvent`
+- `StepStartedEvent`
+- `StepFinishedEvent`
+- `WorkflowFinishedEvent`
+- `WorkflowEvent`
+- `WorkflowHook`
 - `WorkflowGraph`
 - `WorkflowGraphNode`
 - `WorkflowGraphEdge`
 - `export_workflow_graph`
 - `ApprovalRequiredError`
 - `RouteResolutionError`
+- `HookExecutionError`
 - framework-specific exception types
 
 This public API is enough to author and run the examples currently included in
@@ -99,6 +108,7 @@ A workflow caller can inspect:
 - per-step attempt counts
 - route decisions and skipped-step reasons for branching workflows
 - approval decisions for approval-gated steps
+- lifecycle events for workflow and step execution
 - timing information for workflow and step execution
 - workflow graph nodes and edges before execution
 
@@ -132,6 +142,7 @@ The repository includes runnable example workflows under `examples/`:
 - `content_review.py`
 - `branching_refund_workflow.py`
 - `approval_refund_workflow.py`
+- `workflow_hooks.py`
 - `graph_export.py`
 
 These examples demonstrate the implemented runtime rather than imaginary future
@@ -143,6 +154,7 @@ features. Together they show:
 - retry behavior on transient failures
 - route-based branching with explicit terminal paths
 - human approval callbacks with approved and denied decisions
+- lifecycle hook logging
 - graph export with Mermaid rendering
 - inspection of final results and step-level details
 
@@ -167,6 +179,7 @@ The current MVP does not yet include:
 
 - async execution
 - persistent approval pause/resume
+- async event buses or tracing backends
 - worker backends
 - dashboards
 - interactive visual editors
@@ -187,6 +200,7 @@ early in scope. The current strength of the project is clarity:
 - a simple execution model
 - typed state plus ordered steps
 - branching, retries, validation, and structured results built into the runtime
+- lifecycle hooks for observing workflow execution
 - graph export for inspecting workflow structure before execution
 
 That is the current status of the project today.

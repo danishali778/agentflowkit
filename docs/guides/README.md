@@ -14,7 +14,8 @@ If you are new to the project, read these guides in this order:
 3. [inspecting-results.md](inspecting-results.md)
 4. [branching-workflows.md](branching-workflows.md)
 5. [human-approval.md](human-approval.md)
-6. [workflow-graphs.md](workflow-graphs.md)
+6. [workflow-hooks.md](workflow-hooks.md)
+7. [workflow-graphs.md](workflow-graphs.md)
 
 ## What these guides cover
 
@@ -25,6 +26,7 @@ If you are new to the project, read these guides in this order:
 - how to inspect `WorkflowResult` and `StepResult`
 - how to route workflows into conditional paths
 - how to gate selected steps with synchronous approval callbacks
+- how to observe execution with synchronous lifecycle hooks
 - how to export workflow metadata as Mermaid diagrams
 
 ## What these guides do not cover
