@@ -197,6 +197,8 @@ def test_raise_on_failure_wraps_child_workflow_failure() -> None:
         ParentWorkflow().run({}, raise_on_failure=True)
 
     assert isinstance(error_info.value.__cause__, ChildWorkflowExecutionError)
+    assert isinstance(error_info.value.__cause__.__cause__, RuntimeError)
+    assert str(error_info.value.__cause__.__cause__) == "boom"
 
 
 def test_context_without_child_runner_fails_clearly() -> None:

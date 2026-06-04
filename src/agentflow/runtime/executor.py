@@ -471,7 +471,7 @@ def _build_child_workflow_runner(
             raise ChildWorkflowExecutionError(
                 f"Child workflow {child_result.workflow_name!r} failed "
                 f"while running parent step {parent_step_name!r}."
-            )
+            ) from child_result.error
         return child_result
 
     return run_child_workflow
