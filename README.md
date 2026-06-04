@@ -2,7 +2,7 @@
 
 Agent Workflow Kit is an open-source Python SDK for building agent workflows
 with plain Python classes, step decorators, shared state, retries, structured
-execution results, and metadata-only graph export.
+execution results, child workflow composition, and metadata-only graph export.
 
 ## Status
 
@@ -18,6 +18,7 @@ Today, the SDK already supports:
 - conditional branching with explicit route maps
 - synchronous human approval callbacks
 - synchronous lifecycle hooks for logging and observability
+- synchronous child workflow composition through `RunContext`
 - workflow graph export as Mermaid diagrams
 - structured `WorkflowResult` and `StepResult`
 - optional `raise_on_failure=True`
@@ -30,6 +31,7 @@ This makes the project useful today for linear agent-style workflows such as:
 - branching refund decisions
 - approval-gated refund decisions
 - hook-based execution logging
+- composed workflows that delegate to child workflows
 - workflow graph inspection
 - internal multi-step automations
 
@@ -98,6 +100,7 @@ The current SDK already gives you:
 - conditional routing to later steps or `END`
 - human approval callbacks before selected steps run
 - lifecycle hooks for workflow and step events
+- synchronous child workflow execution from context-aware steps
 - step-level retries with fixed delay
 - validation for workflow definitions and step signatures
 - framework-specific exceptions
@@ -111,6 +114,7 @@ The public `agentflow` package currently exposes:
 - `step`
 - `WorkflowResult`
 - `StepResult`
+- `RunContext`
 - `RetryPolicy`
 - `END`
 - `ApprovalRequest`
@@ -127,6 +131,7 @@ The public `agentflow` package currently exposes:
 - `WorkflowGraphEdge`
 - `export_workflow_graph`
 - `HookExecutionError`
+- `ChildWorkflowExecutionError`
 - `ApprovalRequiredError`
 - `RouteResolutionError`
 - framework exception types
@@ -234,6 +239,22 @@ python examples/workflow_hooks.py
 
 See: [examples/workflow_hooks.py](examples/workflow_hooks.py)
 
+### Workflow composition
+
+This example shows:
+
+- a parent workflow running a child workflow from a step
+- nested child results on `StepResult.child_workflows`
+- manual inspection with `fail_parent_on_failure=False`
+
+Run it with:
+
+```bash
+python examples/workflow_composition.py
+```
+
+See: [examples/workflow_composition.py](examples/workflow_composition.py)
+
 ### Graph export workflow
 
 This example shows:
@@ -278,6 +299,7 @@ python examples/content_review.py
 python examples/branching_refund_workflow.py
 python examples/approval_refund_workflow.py
 python examples/workflow_hooks.py
+python examples/workflow_composition.py
 python examples/graph_export.py
 ```
 
@@ -317,6 +339,7 @@ The current SDK does not yet include:
 - worker backends
 - dashboards or interactive visual editors
 - graph execution
+- durable child workflow orchestration
 - framework adapters such as LangGraph integration
 
 Those remain future extensions beyond the current MVP.
