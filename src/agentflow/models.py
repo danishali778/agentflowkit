@@ -8,9 +8,12 @@ architecture.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+
+from agentflow.exceptions import ChildWorkflowExecutionError
 
 
 class _EndSentinel:
@@ -42,6 +45,9 @@ class StepStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+ChildWorkflowRunner = Callable[..., "WorkflowResult"]
 
 
 @dataclass(slots=True)
@@ -85,6 +91,34 @@ class RunContext:
     run_id: str
     attempt: int = 1
     step_name: str | None = None
+    _child_runner: ChildWorkflowRunner | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+
+    def run_child(
+        self,
+        workflow_instance: object,
+        state: object,
+        *,
+        fail_parent_on_failure: bool = True,
+        approval_handler: Callable[[ApprovalRequest], ApprovalDecision | bool] | None = None,
+        hooks: list[Callable[[object], None]] | tuple[Callable[[object], None], ...] | None = None,
+    ) -> WorkflowResult:
+        """Run a child workflow synchronously from the current step context."""
+        if self._child_runner is None:
+            raise ChildWorkflowExecutionError(
+                "Child workflows can only be run from an active workflow step context."
+            )
+
+        return self._child_runner(
+            workflow_instance,
+            state,
+            fail_parent_on_failure=fail_parent_on_failure,
+            approval_handler=approval_handler,
+            hooks=hooks,
+        )
 
 
 @dataclass(slots=True)
@@ -135,6 +169,7 @@ class StepResult:
     skipped_reason: str | None = None
     approval_required: bool = False
     approval_decision: ApprovalDecision | None = None
+    child_workflows: list[WorkflowResult] = field(default_factory=list)
 
 
 @dataclass(slots=True)
