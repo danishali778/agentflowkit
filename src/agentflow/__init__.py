@@ -17,6 +17,7 @@ from agentflow.decorators import step, workflow
 from agentflow.exceptions import (
     AgentFlowError,
     ApprovalRequiredError,
+    ChildWorkflowExecutionError,
     HookExecutionError,
     RouteResolutionError,
     StateValidationError,
@@ -35,6 +36,7 @@ from agentflow.models import (
     ApprovalDecision,
     ApprovalRequest,
     RouteDecision,
+    RunContext,
     StepResult,
     WorkflowResult,
 )
@@ -46,10 +48,12 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalRequest",
     "ApprovalRequiredError",
+    "ChildWorkflowExecutionError",
     "END",
     "HookExecutionError",
     "RouteDecision",
     "RouteResolutionError",
+    "RunContext",
     "RetryPolicy",
     "StateValidationError",
     "StepFinishedEvent",

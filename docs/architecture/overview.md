@@ -29,6 +29,7 @@ flowchart LR
     E --> K[Approval callback]
     E --> M[Lifecycle hooks]
     E --> J[Step invocation]
+    J --> N[Child workflow composition]
     J --> H[Route resolution]
     H --> I[WorkflowResult / StepResult]
 ```
@@ -100,6 +101,7 @@ The executor is responsible for:
 - validating the workflow and input state
 - assigning shared state to `self.state`
 - running steps in order
+- running child workflows synchronously when a step calls `context.run_child(...)`
 - resolving forward route decisions
 - requesting approval before approval-gated steps run
 - applying retry behavior
@@ -119,6 +121,7 @@ This package contains:
 - routing
 - approvals
 - lifecycle hooks
+- child workflow composition
 
 The old top-level control modules such as `agentflow.retry`,
 `agentflow.routing`, `agentflow.approvals`, and `agentflow.hooks` remain as
@@ -163,6 +166,19 @@ Their job is to:
 - emit step started and finished events
 - let users observe execution without changing workflow logic
 - fail explicitly with `HookExecutionError` when hook callbacks fail
+
+#### Workflow composition
+
+Composition lets a context-aware parent step run another workflow
+synchronously.
+
+Its job is to:
+
+- run child workflows through the normal executor path
+- inherit parent hooks and approval handlers by default
+- attach child `WorkflowResult` objects to the parent `StepResult`
+- fail the parent step with `ChildWorkflowExecutionError` when a child fails
+  unless the step opts into manual inspection
 
 ### 6. Inspection package
 
@@ -239,6 +255,7 @@ The current architecture is intentionally:
 - forward-routed when configured
 - approval-gated when configured
 - hook-observable when configured
+- composable through synchronous child workflows
 - graph-exportable before execution
 - stateful
 - explicit
@@ -261,6 +278,7 @@ The implemented architecture does not yet include:
 - persistent approval pause/resume
 - async event buses or tracing backends
 - distributed execution
+- durable child workflow orchestration
 - graph execution
 - dashboards or interactive visual editors
 

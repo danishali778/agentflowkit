@@ -41,6 +41,7 @@ jobs:
               "docs/guides/branching-workflows.md",
               "docs/guides/human-approval.md",
               "docs/guides/workflow-hooks.md",
+              "docs/guides/workflow-composition.md",
               "docs/guides/workflow-graphs.md",
           ]
 

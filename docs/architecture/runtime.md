@@ -9,7 +9,7 @@ This document explains how the current runtime executes a workflow from
 
 Graph export is separate from runtime execution. `export_workflow_graph(...)`
 reads and validates workflow metadata, but it does not enter the execution flow
-below.
+below or inspect dynamic child workflow calls.
 
 ```mermaid
 flowchart TD
@@ -29,7 +29,10 @@ flowchart TD
     V -- Yes --> I[Resolve retry policy]
     T -- No --> I
     I --> J[Invoke step]
-    J --> K{Step succeeded?}
+    J --> C1{Step calls context.run_child?}
+    C1 -- Yes --> C2[Run child workflow synchronously]
+    C2 --> J
+    C1 -- No --> K
     K -- Yes --> L[Resolve route if configured]
     K -- No --> M{Retry allowed?}
     M -- Yes --> N[Sleep and retry]
@@ -119,7 +122,37 @@ For each step, it:
 - requests approval when the step requires it
 - resolves the effective `RetryPolicy`
 - invokes the step
+- records child workflow results when the step calls `context.run_child(...)`
 - resolves any declared route decision
+
+## Workflow composition behavior
+
+Context-aware steps can call `context.run_child(...)` to run another workflow
+synchronously inside the current parent step.
+
+The child workflow uses normal runtime behavior:
+
+- validation
+- shared state assignment
+- retries
+- approval handlers
+- hooks
+- routing
+- structured `WorkflowResult`
+
+Child workflow results are attached to the parent step in
+`StepResult.child_workflows`.
+
+By default, a failed child workflow stops the parent step with
+`ChildWorkflowExecutionError`. A parent step can pass
+`fail_parent_on_failure=False` when it wants to inspect a failed child result
+and continue.
+
+Child workflows inherit the parent approval handler and hooks unless the caller
+passes replacements to `context.run_child(...)`.
+
+Composition does not persist child workflows, schedule background work, run
+children in parallel, or make graph export show dynamic child calls.
 
 ## Hook behavior
 
@@ -228,6 +261,7 @@ Each executed step records:
 - route key and next step when routing is used
 - skipped reason for synthesized skipped results
 - approval requirement and approval decision when approval is used
+- child workflow results when composition is used
 
 ### `WorkflowResult`
 

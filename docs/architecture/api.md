@@ -16,6 +16,7 @@ The current top-level public API is intentionally small:
 - `step`
 - `WorkflowResult`
 - `StepResult`
+- `RunContext`
 - `RetryPolicy`
 - `END`
 - `ApprovalRequest`
@@ -35,6 +36,7 @@ The current top-level public API is intentionally small:
 - `AgentFlowError`
 - `WorkflowDefinitionError`
 - `WorkflowExecutionError`
+- `ChildWorkflowExecutionError`
 - `StepExecutionError`
 - `StateValidationError`
 - `RouteResolutionError`
@@ -54,6 +56,7 @@ flowchart TD
     A --> E[StepResult]
     A --> F[RetryPolicy]
     A --> G[Framework exceptions]
+    A --> O[RunContext]
     A --> J[END sentinel]
     A --> K[RouteDecision]
     A --> L[ApprovalRequest / ApprovalDecision]
@@ -65,6 +68,7 @@ flowchart TD
     I --> D
     I --> N
     D --> E
+    O --> I
     H --> M
 ```
 
@@ -274,6 +278,34 @@ On normal usage, `run(...)` returns a `WorkflowResult`.
 
 This object is the main inspection surface for callers after a workflow run.
 
+## Workflow composition API
+
+Context-aware steps can run child workflows synchronously through `RunContext`.
+
+```python
+from agentflow import RunContext, step, workflow
+
+
+@workflow
+class ParentWorkflow:
+    @step
+    def run_refund_child(self, context: RunContext) -> None:
+        child_result = context.run_child(RefundWorkflow(), self.state.refund)
+        self.state.refund_status = child_result.status.value
+```
+
+`context.run_child(...)` returns a normal `WorkflowResult`.
+
+By default, if the child workflow fails, the parent step fails with
+`ChildWorkflowExecutionError`. If the parent needs to inspect a failed child and
+continue, pass `fail_parent_on_failure=False`.
+
+Child workflow results are recorded on the parent step as
+`StepResult.child_workflows`.
+
+Composition is synchronous. It does not persist child workflows, resume them
+later, run them in workers, or make graph export dynamic.
+
 ## Result types
 
 ### `WorkflowResult`
@@ -314,6 +346,7 @@ It currently includes:
 - `skipped_reason`
 - `approval_required`
 - `approval_decision`
+- `child_workflows`
 
 This is what makes the current MVP useful for debugging and inspection even
 without a dashboard.
@@ -419,6 +452,13 @@ Raised when a lifecycle hook fails while handling a workflow or step event.
 
 Hook failures are framework failures because hooks run inside the synchronous
 workflow execution boundary.
+
+### `ChildWorkflowExecutionError`
+
+Raised when a child workflow failure stops the parent step.
+
+The failed child result is still recorded on the parent step in
+`StepResult.child_workflows`.
 
 ### `StepExecutionError`
 

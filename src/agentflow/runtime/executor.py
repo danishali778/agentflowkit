@@ -25,6 +25,7 @@ from agentflow.controls.routing import finalize_step_results, resolve_route_deci
 from agentflow.decorators import WORKFLOW_DEFINITION_ATTR
 from agentflow.exceptions import (
     ApprovalRequiredError,
+    ChildWorkflowExecutionError,
     HookExecutionError,
     RouteResolutionError,
     WorkflowDefinitionError,
@@ -168,6 +169,15 @@ class WorkflowExecutor:
             step_started_at = _utc_now()
             attempts = 0
             approval_decision: ApprovalDecision | None = None
+            child_workflows: list[WorkflowResult] = []
+            parent_approval_handler = approval_handler
+            parent_hooks = hooks
+            run_child_workflow = _build_child_workflow_runner(
+                parent_step_name=step_definition.name,
+                child_workflows=child_workflows,
+                parent_approval_handler=parent_approval_handler,
+                parent_hooks=parent_hooks,
+            )
 
             try:
                 emit_hooks(
@@ -192,6 +202,7 @@ class WorkflowExecutor:
                     finished_at=step_finished_at,
                     duration_ms=_duration_ms(step_started_at, step_finished_at),
                     approval_required=step_definition.requires_approval,
+                    child_workflows=child_workflows,
                 )
                 workflow_error = error
                 break
@@ -217,6 +228,7 @@ class WorkflowExecutor:
                         finished_at=step_finished_at,
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=True,
+                        child_workflows=child_workflows,
                     )
                     hook_error = record_step_result(current_step_index, step_result)
                     workflow_error = hook_error or error
@@ -238,6 +250,7 @@ class WorkflowExecutor:
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=True,
                         approval_decision=approval_decision,
+                        child_workflows=child_workflows,
                     )
                     hook_error = record_step_result(current_step_index, step_result)
                     workflow_error = hook_error or approval_error
@@ -250,6 +263,7 @@ class WorkflowExecutor:
                     step_name=step_definition.name,
                     run_id=run_id,
                     attempt=attempts,
+                    _child_runner=run_child_workflow,
                 )
 
                 try:
@@ -271,6 +285,7 @@ class WorkflowExecutor:
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=step_definition.requires_approval,
                         approval_decision=approval_decision,
+                        child_workflows=child_workflows,
                     )
                     hook_error = record_step_result(current_step_index, step_result)
                     workflow_error = hook_error or error
@@ -295,6 +310,7 @@ class WorkflowExecutor:
                         duration_ms=_duration_ms(step_started_at, step_finished_at),
                         approval_required=step_definition.requires_approval,
                         approval_decision=approval_decision,
+                        child_workflows=child_workflows,
                     )
                     hook_error = record_step_result(current_step_index, step_result)
                     workflow_error = hook_error or error
@@ -320,6 +336,7 @@ class WorkflowExecutor:
                     ),
                     approval_required=step_definition.requires_approval,
                     approval_decision=approval_decision,
+                    child_workflows=child_workflows,
                 )
                 hook_error = record_step_result(current_step_index, step_result)
                 if hook_error is not None:
@@ -420,3 +437,41 @@ def _raise_workflow_execution_error(
         f"{failing_result.step_name!r} after {failing_result.attempts} attempt(s) "
         f"due to {error_type}."
     ) from workflow_error
+
+
+def _build_child_workflow_runner(
+    *,
+    parent_step_name: str,
+    child_workflows: list[WorkflowResult],
+    parent_approval_handler: ApprovalHandler | None,
+    parent_hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None,
+):
+    """Build the per-step callback used by RunContext.run_child."""
+
+    def run_child_workflow(
+        child_workflow_instance: object,
+        child_state: object,
+        *,
+        fail_parent_on_failure: bool = True,
+        approval_handler: ApprovalHandler | None = None,
+        hooks: list[WorkflowHook] | tuple[WorkflowHook, ...] | None = None,
+    ) -> WorkflowResult:
+        """Run a nested workflow and remember its result on the parent step."""
+        child_result = WorkflowExecutor().run(
+            child_workflow_instance,
+            child_state,
+            raise_on_failure=False,
+            approval_handler=(
+                approval_handler if approval_handler is not None else parent_approval_handler
+            ),
+            hooks=hooks if hooks is not None else parent_hooks,
+        )
+        child_workflows.append(child_result)
+        if fail_parent_on_failure and child_result.status is WorkflowStatus.FAILED:
+            raise ChildWorkflowExecutionError(
+                f"Child workflow {child_result.workflow_name!r} failed "
+                f"while running parent step {parent_step_name!r}."
+            ) from child_result.error
+        return child_result
+
+    return run_child_workflow

@@ -41,3 +41,7 @@ class ApprovalRequiredError(AgentFlowError):
 
 class HookExecutionError(AgentFlowError):
     """Raised when a workflow lifecycle hook fails."""
+
+
+class ChildWorkflowExecutionError(AgentFlowError):
+    """Raised when a child workflow failure stops a parent step."""

@@ -6,6 +6,7 @@ import agentflow
 from agentflow.exceptions import (
     AgentFlowError,
     ApprovalRequiredError,
+    ChildWorkflowExecutionError,
     HookExecutionError,
     RouteResolutionError,
     StateValidationError,
@@ -139,6 +140,11 @@ def test_result_models_store_status_payloads_and_timing_fields() -> None:
     started_at = datetime(2026, 1, 1, 12, 0, 0)
     finished_at = datetime(2026, 1, 1, 12, 0, 1)
     step_error = RuntimeError("temporary model failure")
+    child_workflow_result = WorkflowResult(
+        workflow_name="child_refund_workflow",
+        state={"approved": True},
+        status=WorkflowStatus.SUCCEEDED,
+    )
     step_result = StepResult(
         step_name="generate_response",
         status=StepStatus.FAILED,
@@ -152,6 +158,7 @@ def test_result_models_store_status_payloads_and_timing_fields() -> None:
         next_step="deny_refund",
         approval_required=True,
         approval_decision=ApprovalDecision(approved=True, reason="Approved by manager."),
+        child_workflows=[child_workflow_result],
     )
     skipped_result = StepResult(
         step_name="approve_refund",
@@ -192,6 +199,7 @@ def test_result_models_store_status_payloads_and_timing_fields() -> None:
         approved=True,
         reason="Approved by manager.",
     )
+    assert step_result.child_workflows == [child_workflow_result]
     assert skipped_result.skipped_reason == "not selected by route"
 
     assert workflow_result.workflow_name == "refund_workflow"
@@ -242,6 +250,7 @@ def test_result_and_context_defaults_support_later_runtime_population() -> None:
     assert step_result.skipped_reason is None
     assert step_result.approval_required is False
     assert step_result.approval_decision is None
+    assert step_result.child_workflows == []
 
     assert workflow_result.status is WorkflowStatus.PENDING
     assert workflow_result.steps == []
@@ -258,12 +267,14 @@ def test_top_level_result_and_exception_exports_match_submodules() -> None:
     assert agentflow.StepResult is StepResult
     assert agentflow.AgentFlowError is AgentFlowError
     assert agentflow.ApprovalRequiredError is ApprovalRequiredError
+    assert agentflow.ChildWorkflowExecutionError is ChildWorkflowExecutionError
     assert agentflow.RouteResolutionError is RouteResolutionError
     assert agentflow.WorkflowDefinitionError is WorkflowDefinitionError
     assert agentflow.StepExecutionError is StepExecutionError
     assert agentflow.WorkflowExecutionError is WorkflowExecutionError
     assert agentflow.StateValidationError is StateValidationError
     assert agentflow.HookExecutionError is HookExecutionError
+    assert agentflow.RunContext is RunContext
 
 
 def test_public_api_all_contains_only_the_expected_symbols() -> None:
@@ -273,10 +284,12 @@ def test_public_api_all_contains_only_the_expected_symbols() -> None:
         "ApprovalDecision",
         "ApprovalRequest",
         "ApprovalRequiredError",
+        "ChildWorkflowExecutionError",
         "END",
         "HookExecutionError",
         "RouteDecision",
         "RouteResolutionError",
+        "RunContext",
         "RetryPolicy",
         "StateValidationError",
         "StepFinishedEvent",
@@ -305,8 +318,8 @@ def test_public_api_all_contains_only_the_expected_symbols() -> None:
     assert agentflow.ApprovalDecision is ApprovalDecision
     assert agentflow.ApprovalRequest is ApprovalRequest
     assert agentflow.RouteDecision is RouteDecision
+    assert agentflow.RunContext is RunContext
     assert "WorkflowDefinition" not in agentflow.__all__
     assert "StepDefinition" not in agentflow.__all__
-    assert "RunContext" not in agentflow.__all__
     assert "WorkflowStatus" not in agentflow.__all__
     assert "StepStatus" not in agentflow.__all__
